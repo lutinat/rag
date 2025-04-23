@@ -1,0 +1,15 @@
+*.pdf
+*.txt
+*.json
+*.jsonl
+*.ipynb
+.env
+
+
+# Ignore all files in the inference directory
+inference/models/
+
+# Ignore Pycache
+__pycache__/
+
+
