@@ -171,7 +171,12 @@ def create_paragraphs(text: str) -> List[str]:
     
     return paragraphs
 
-def create_chunks(paragraphs: List[str], chunk_size: int = 2, overlap: int = 1, max_chunk_length: int = 300, source_name: str = "document.pdf") -> List[Dict]:
+def create_chunks(paragraphs: List[str], 
+                  chunk_size: int = 2, 
+                  overlap: int = 1, 
+                  max_chunk_length: int = 300, 
+                  source_name: str = "document.pdf",
+                  metadata: Dict = None) -> List[Dict]:
     """Crée des chunks à partir des paragraphes avec overlap."""
     chunks = []
     chunk_id = 0
@@ -190,14 +195,14 @@ def create_chunks(paragraphs: List[str], chunk_size: int = 2, overlap: int = 1, 
                     chunk_data = {
                         "id": f"{source_name}_c{chunk_id}",
                         "text": chunk_text,
-                        "source": source_name
+                        "metadata": metadata
                     }
                     chunks.append(chunk_data)
                     chunk_id += 1
     
     return chunks
 
-def extract_chunks(text: str, source_name: str) -> List[Dict]:
+def extract_chunks(text: str, source_name: str, metadata: Dict) -> List[Dict]:
     """Extrait des chunks de haute qualité à partir d'un texte brut."""
     # Créer des paragraphes
     paragraphs = create_paragraphs(text)
@@ -208,7 +213,8 @@ def extract_chunks(text: str, source_name: str) -> List[Dict]:
         chunk_size=2,  # 2 paragraphes par chunk
         overlap=1,     # 1 paragraphe d'overlap
         max_chunk_length=300,  # Maximum 300 caractères par chunk
-        source_name=source_name
+        source_name=source_name,
+        metadata=metadata
     )
     
     return chunks
@@ -249,7 +255,7 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         metadata = extract_metadata_from_pdf(pdf_path)
         
         # Extract chunks from the text
-        chunks = extract_chunks(text, source_name=pdf_path)
+        chunks = extract_chunks(text, source_name=pdf_path, metadata=metadata)
         all_chunks.extend(chunks)
         
         # Generate a filename for the JSONL chunk file based on the PDF name
@@ -264,7 +270,8 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     for txt_path in tqdm(txt_paths):
         # print(f"Processing {txt_path}")
         text = load_txt(txt_path)
-        chunks = extract_chunks(text, source_name=txt_path)
+        metadata = {'filename': os.path.basename(txt_path)}
+        chunks = extract_chunks(text, source_name=txt_path, metadata=metadata)
         all_chunks.extend(chunks)
 
         # Generate a filename for the JSONL chunk file based on the TXT name

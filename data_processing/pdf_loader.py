@@ -2,7 +2,7 @@ import pdfplumber
 import os
 from typing import Dict, List, Tuple
 import re
-
+import glob
 def load_pdf(pdf_path: str) -> str:
     """Charge un fichier PDF et retourne son contenu textuel."""
     text = ""
@@ -104,18 +104,114 @@ def extract_metadata_from_pdf(pdf_path: str) -> Dict:
         Dict: Métadonnées extraites
     """
     metadata = {
+        "title_from_pdf": None,
+        "title_from_metadata": None,
+        "filename": None,
+        # "authors": None,
+        "creation_date": None,
+        "subject": None,
+        "keywords": None
+    }
+    
+    # Get filename and title from pdf
+    title_from_pdf = get_title_from_pdf(pdf_path)
+    filename = os.path.basename(pdf_path)
+    metadata["title_from_pdf"] = title_from_pdf
+    metadata["filename"] = filename
+
+    # Get metadata from pdf
+    metadata_from_pdf = get_metadata_plumberpdf(pdf_path)
+    metadata["title_from_metadata"] = metadata_from_pdf["title"]
+    # metadata["authors"] = metadata_from_pdf["author"]
+    metadata["creation_date"] = metadata_from_pdf["creation_date"]
+    metadata["subject"] = metadata_from_pdf["subject"]
+    metadata["keywords"] = metadata_from_pdf["keywords"]
+    
+    return metadata
+
+
+
+def get_title_from_pdf(pdf_path: str) -> str:
+    min_font_size = 15
+    with pdfplumber.open(pdf_path) as pdf:
+        # Get the first page
+        first_page = pdf.pages[0]
+        
+        # Extract words with their positions (top, bottom, left, right)
+        layout_objects = first_page.extract_words()
+
+        # Initialize variables for sentence segmentation and font size tracking
+        sentences = []
+        current_sentence = []
+        current_font_sizes = []
+        last_font_size = None
+        
+        for obj in layout_objects:
+            word = obj['text']
+            font_size = obj['bottom'] - obj['top']  # Font size as the difference between top and bottom
+            
+            # If the font size is significantly different, consider it a new sentence
+            if last_font_size and abs(last_font_size - font_size) > 1:  # Change threshold can be adjusted
+                if current_sentence:
+                    sentences.append({
+                        'sentence': ' '.join(current_sentence),
+                        'avg_font_size': sum(current_font_sizes) / len(current_font_sizes) if current_font_sizes else 0
+                    })
+                    current_sentence = []
+                    current_font_sizes = []
+            
+            # Add word and its font size to the current sentence
+            current_sentence.append(word)
+            current_font_sizes.append(font_size)
+            last_font_size = font_size
+        
+
+        # If there's any leftover sentence, append it
+        if current_sentence:
+            sentences.append({
+                'sentence': ' '.join(current_sentence),
+                'avg_font_size': sum(current_font_sizes) / len(current_font_sizes) if current_font_sizes else 0
+            })
+
+        # Remove sentences with average font size less than min_font_size
+        sentences = [s for s in sentences if s['avg_font_size'] > min_font_size]
+        
+        # Find the sentence with the largest average font size (likely the title)
+        if sentences:
+            title = max(sentences, key=lambda x: x['avg_font_size'])['sentence']
+        else:
+            title = None
+
+    return title
+
+
+def get_metadata_plumberpdf(pdf_path: str) -> Dict:
+    metadata = {
         "title": None,
         "author": None,
         "subject": None,
         "keywords": None,
         "creation_date": None
     }
-    
     with pdfplumber.open(pdf_path) as pdf:
         if pdf.metadata:
             metadata.update({
                 k.lower(): v for k, v in pdf.metadata.items()
                 if k.lower() in metadata
             })
-    
     return metadata
+
+
+if __name__ == "__main__":
+    pdf_files = glob.glob("/home/lucasd/code/rag/data/*.pdf")
+    s = 0
+    for pdf_file in pdf_files:
+        print(pdf_file)
+        title = get_title_from_pdf(pdf_file)
+        print(f"\n\nTitle: {title}")
+        if not title:
+            s += 1
+
+        metadata = get_metadata_plumberpdf(pdf_file)
+        print(f"Metadata: {metadata}")
+    print(f"Number of files with no title: {s}")

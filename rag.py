@@ -64,7 +64,7 @@ def reranker(query, relevant_chunks, k=3):
 
     Parameters:
     - query (str): The input query.
-    - relevant_chunks (list of str): A list of relevant chunks.
+    - relevant_chunks (list of dict): A list of chunks. Contains the text and the metadata.
     - k (int): The number of top chunks to return.
 
     Returns:
@@ -72,19 +72,17 @@ def reranker(query, relevant_chunks, k=3):
     """
 
     # Initialize the reranker with BGE-M3 model
-    reranker = FlagReranker('BAAI/bge-reranker-v2-m3', use_fp16=True)
+    model = FlagReranker('BAAI/bge-reranker-v2-m3', use_fp16=True)
     
-    # Compute similarity scores between the query and each chunk
-    scores = reranker.compute_score([[query, chunk] for chunk in relevant_chunks], normalize=True)
-    
-    # Create a list of chunks with their scores
-    scored_chunks = list(zip(relevant_chunks, scores))
-    
-    # Sort chunks by score in descending order and return the top-k
-    ranked_chunks = sorted(scored_chunks, key=lambda x: x[1], reverse=True)
-    
-    # Return the top-k chunks
-    return [chunk for chunk, _ in ranked_chunks[:k]]
+    # Score each chunk and keep its index
+    scored_chunks = [(i, score) for i, score in enumerate(
+        model.compute_score([[query, chunk["text"]] for chunk in relevant_chunks], normalize=True)
+    )]
+
+    # Sort and select top-k
+    top_k_indices = [i for i, _ in sorted(scored_chunks, key=lambda x: x[1], reverse=True)[:k]]
+
+    return [relevant_chunks[i] for i in top_k_indices]
 
 
 def hyDE(question: str, pipeline) -> str:
@@ -105,10 +103,10 @@ def hyDE(question: str, pipeline) -> str:
     }
 
     prompt = (
-        "You are a helpful technical assistant for a company with expertise in satellite, space sector, their teams and internal tools. "
-        "Generate a single, concise and plausible full-sentence that could answer the following question. "
-        "Reintroduce important words and vocabulary from the question in your answer to stay on topic. "
-        "The sentence should sound natural and informative, useful for retrieving relevant documents. "
+        "You are a helpful technical assistant for a company with expertise in satellite, space sector, their teams and internal tools.\n "
+        "Generate a single, concise and plausible full-sentence that could answer the following question.\n "
+        "Reintroduce the question and important words and vocabulary from the question in your answer to stay on topic.\n "
+        "The sentence should sound natural and informative, useful for retrieving relevant documents.\n "
         "Avoid over-speculation or unrelated details.\n\n"
         f"Question: {question}\n\nAnswer:"
     )
@@ -122,25 +120,55 @@ def hyDE(question: str, pipeline) -> str:
 
     return answer
 
-def build_chat_messages_from_chunks(question: str, chunks: list[str]) -> list[dict]:
+def build_prompt_from_chunks(question: str, chunks: list[str]) -> list[dict]:
+    """
+    Build chat messages from chunks, embedding metadata in a structured format
+    to enhance relevance and grounding for the LLM.
+
+    Parameters:
+    - question (str): The user's question.
+    - chunks (list of dict): List of retrieved chunks, each with:
+        - 'text' (str): The content.
+        - 'metadata' (dict): Metadata like source, page, etc.
+
+    Returns:
+    - list[dict]: Messages to pass to a chat model (system + user prompts).
+    """
+
+    # Build rich context blocks with metadata
+    context_blocks = []
+    for i, chunk in enumerate(chunks):
+        meta = chunk.get("metadata", {})
+        meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items())
+        formatted_block = (
+            f"### Context {i+1}\n"
+            f"**Metadata:**\n{meta_lines if meta else '  - None'}\n"
+            f"**Content:**\n{chunk['text']}"
+        )
+        context_blocks.append(formatted_block)
+
     system_prompt = {
         "role": "system",
         "content": (
-            "You are an expert AI assistant for Satlantis, a company in the space sector. "
-            "Your goal is to provide accurate, concise, and context-grounded answers strictly based on the information provided. "
-            "Do not hallucinate or make up information."
-            "If the information is incomplete or unclear, explain how it impacts your answer. "
-            "In cases where an answer cannot be fully derived, explain why the full answer isn't available and what additional details would be needed."
+            "You are an expert AI assistant for Satlantis, a company in the space sector.\n "
+            "Your goal is to provide accurate, concise, and context-grounded answers strictly based on the information provided.\n "
+            "Answer concisely unless more detail is needed to answer accurately.\n "
+            "Do not hallucinate or make up information.\n "
+            "If the information is incomplete or unclear, explain how it impacts your answer. \n "
+            "In cases where an answer cannot be fully derived, explain why the full answer isn't available and what additional details would be needed.\n"
+            "If the question is vague or lacks necessary context, make sure to explicitly mention the uncertainty "
+            "and request additional information or clarification from the user."
         )
     }
 
-    user_prompt = { 
+    user_prompt = {
         "role": "user",
         "content": (
-            "The following information is provided as context. "
-            "Use only this information to answer the question.\n\n"
-            + "\n\n".join(f"Context {i+1}:\n{chunk}" for i, chunk in enumerate(chunks))
-            + f"\n\nQuestion: {question}"
+            "You are provided with context snippets from internal documents.\n"
+            "Each one includes metadata and content. Use **only** the given information to answer.\n"
+            "If unsure, explain what’s missing.\n\n"
+            f"{'---'.join(context_blocks)}\n\n"
+            f"### Question:\n{question}"
         )
     }
 
@@ -196,14 +224,14 @@ if __name__ == "__main__":
 
     # Retrieve the top-20 chunks
     print("Retrieving context...")
-    top_chunks = retrieve_context(hypothetical_answer, embedder, chunks, index, k=30)
+    top_chunks = retrieve_context(hypothetical_answer, embedder, chunks, index, k=20)
 
     # Rerank to get the top-3 chunks
     print("Reranking...")
-    reranked_chunks = reranker(question, top_chunks, k=3)
+    reranked_chunks = reranker(question, top_chunks, k=4)
 
     # Generate the prompt
-    messages = build_chat_messages_from_chunks(question, reranked_chunks)
+    messages = build_prompt_from_chunks(question, reranked_chunks)
 
     # Generate the answer
     generation_args = { 

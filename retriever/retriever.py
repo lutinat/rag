@@ -126,8 +126,7 @@ def retrieve_context(question: str,
     Returns:
         Concatenated context from the most relevant chunks
     """
-    text_chunks = [c["text"] for c in chunks]
-
+    
     # Generate embedding for the question
     question_embedding = embedder.encode([question])
     question_embedding = np.array(question_embedding).astype('float32')
@@ -136,6 +135,6 @@ def retrieve_context(question: str,
     distances, indices = index.search(question_embedding, k)
     
     # Get the most relevant chunks
-    relevant_chunks = [text_chunks[i] for i in indices[0]]
+    relevant_chunks = [chunks[i] for i in indices[0]]
     
     return relevant_chunks
