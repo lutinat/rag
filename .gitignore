@@ -3,6 +3,7 @@
 *.json
 *.jsonl
 *.ipynb
+*.npy
 .env
 
 
