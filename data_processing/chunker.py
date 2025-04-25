@@ -6,6 +6,7 @@ import os
 from glob import glob
 from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf
 from .pdf_loader import load_txt
+from tqdm import tqdm
 
 
 # Charger le modèle spaCy multilingue et ajouter le sentencizer
@@ -240,8 +241,9 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     all_chunks = []
     
     # PDF FILES
-    for pdf_path in pdf_paths:
-        print(f"Processing {pdf_path}")
+    print(f"Processing {len(pdf_paths)} PDFs")
+    for pdf_path in tqdm(pdf_paths):
+        # print(f"Processing {pdf_path}")
         # Extract text and metadata
         text = extract_text_from_pdf(pdf_path)
         metadata = extract_metadata_from_pdf(pdf_path)
@@ -256,11 +258,11 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         
         # Save the chunks to JSONL
         save_chunks_jsonl(chunks, chunk_path)
-        print(f"Processed {pdf_path} and saved chunks to {chunk_path}")
 
     # TXT FILES
-    for txt_path in txt_paths:
-        print(f"Processing {txt_path}")
+    print(f"Processing {len(txt_paths)} TXT files")
+    for txt_path in tqdm(txt_paths):
+        # print(f"Processing {txt_path}")
         text = load_txt(txt_path)
         chunks = extract_chunks(text, source_name=txt_path)
         all_chunks.extend(chunks)
@@ -274,10 +276,6 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     
     # CSV FILES
     # TODO: Implement CSV files
-
-    # Save all chunks to a single JSONL file
-    all_chunks_path = os.path.join(chunk_folder_path, "all_chunks.jsonl")
-    save_chunks_jsonl(all_chunks, all_chunks_path)
-    print(f"Saved all chunks to {all_chunks_path}")
     
+    print(f"Total chunks: {len(all_chunks)}")
     return all_chunks

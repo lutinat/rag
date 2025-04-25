@@ -87,68 +87,78 @@ def reranker(query, relevant_chunks, k=3):
     return [chunk for chunk, _ in ranked_chunks[:k]]
 
 
+def hyDE(question: str, pipeline) -> str:
+    """
+    Generate a hypothetical answer to the question to be used for retrieval.
+    The answer is concise and helps improve the semantic search step in RAG.
+    """
+
+    if not question or not isinstance(question, str):
+        raise ValueError("Invalid question provided.")
+
+    generation_args = {
+        "max_new_tokens": 100,  # Limite réduite pour forcer une réponse concise
+        "return_full_text": False,
+        "temperature": 0.1,
+        "do_sample": True,
+        "top_p": 0.9,  # Contrôle supplémentaire sur l'échantillonnage
+    }
+
+    prompt = (
+        "You are a helpful technical assistant for a company with expertise in satellite, space sector, their teams and internal tools. "
+        "Generate a single, concise and plausible full-sentence that could answer the following question. "
+        "Reintroduce important words and vocabulary from the question in your answer to stay on topic. "
+        "The sentence should sound natural and informative, useful for retrieving relevant documents. "
+        "Avoid over-speculation or unrelated details.\n\n"
+        f"Question: {question}\n\nAnswer:"
+    )
+
+
+    try:
+        output = pipeline(prompt, **generation_args)
+        answer = output[0]['generated_text'].strip()
+    except Exception as e:
+        raise RuntimeError(f"HyDE generation failed: {e}")
+
+    return answer
+
 def build_chat_messages_from_chunks(question: str, chunks: list[str]) -> list[dict]:
     system_prompt = {
         "role": "system",
         "content": (
-            "You are an expert AI assistant for Satlantis. "
-            "Your goal is to provide accurate, concise, and context-grounded answers based strictly on the information provided. "
-            "If the answer is not explicitly present in the context, respond with 'The answer is not available in the provided context.' "
+            "You are an expert AI assistant for Satlantis, a company in the space sector. "
+            "Your goal is to provide accurate, concise, and context-grounded answers strictly based on the information provided. "
+            "Do not hallucinate or make up information."
+            "If the information is incomplete or unclear, explain how it impacts your answer. "
+            "In cases where an answer cannot be fully derived, explain why the full answer isn't available and what additional details would be needed."
         )
     }
 
-    # Inject context clearly
-    context_message = {
+    user_prompt = { 
         "role": "user",
         "content": (
             "The following information is provided as context. "
-            "Use only this information to answer the next question:\n\n" +
-            "\n\n".join(f"Chunk {i+1}:\n{chunk}" for i, chunk in enumerate(chunks))
+            "Use only this information to answer the question.\n\n"
+            + "\n\n".join(f"Context {i+1}:\n{chunk}" for i, chunk in enumerate(chunks))
+            + f"\n\nQuestion: {question}"
         )
     }
 
-    # User question
-    question_message = {
-        "role": "user",
-        "content": f"Question: {question}"
-    }
-
-    return [system_prompt, context_message, question_message]
+    return [system_prompt, user_prompt]
 
 
 if __name__ == "__main__":
 
-    # Parse the question
+    # Parse the arguments
+    if len(sys.argv) < 2:
+        print("Usage: python rag.py <question> [-s] (optional)")
+        sys.exit(1)
     question = sys.argv[1]
-    print(f"Question: {question}")
+    # Check if the flag for saving embeddings (-s) is provided
+    recompute_embeddings = '-s' in sys.argv[2:]
 
-    # # Download the model if it's not already downloaded
-    # if not os.path.exists(model_path):
-    #     print(f"Downloading model to {model_path}...")
-    # model_path = download_model(model_path)
-
-    # # First time: extract and save
-    # chunks = get_all_chunks("/home/lucasd/code/rag/data", "/home/lucasd/code/rag/processed_data")
-
-    # Later: just load
-    chunks = load_chunks_jsonl(chunk_path)
-
-    # Prepare text list
-    text_chunks = [c["text"] for c in chunks]
-
-    # Build FAISS
-    index, embeddings, embedder = build_faiss_index(text_chunks)
-
-    top_chunks = retrieve_context(question, embedder, text_chunks, index, k=20)
-
-    # Rerank the top-3 chunks
-    reranked_chunks = reranker(question, top_chunks, k=4)
-
-    # # Load the Mistral model
-    # tokenizer, model = load_mistral_pipeline(model_path)
-
+    # Load the Phi-4-mini-instruct model
     model_path = "microsoft/Phi-4-mini-instruct"
-
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         device_map="auto",
@@ -156,31 +166,54 @@ if __name__ == "__main__":
         trust_remote_code=True,
     )
     tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-    messages = build_chat_messages_from_chunks(question, reranked_chunks)
-
     pipe = pipeline( 
     "text-generation", 
     model=model, 
     tokenizer=tokenizer, 
     ) 
 
+    # # Download the model if it's not already downloaded
+    # if not os.path.exists(model_path):
+    #     print(f"Downloading model to {model_path}...")
+    # model_path = download_model(model_path)
+
+    # Extract and save chunks
+    if recompute_embeddings:
+        chunks = get_all_chunks("/home/lucasd/code/rag/data", "/home/lucasd/code/rag/processed_data")
+    else:
+        chunks = load_chunks_jsonl(chunk_path)
+
+    # Generate the embeddings, remove duplicates and build the FAISS index
+    index, embeddings, chunks, embedder = build_faiss_index(chunks, save_embeddings=recompute_embeddings)
+    if recompute_embeddings:
+        # Save all chunks to a single JSONL file
+        save_chunks_jsonl(chunks, chunk_path)
+        print(f"Saved all chunks to {chunk_path}")
+
+    # Generate the hypothetical answer (HyDE)
+    hypothetical_answer = hyDE(question, pipe)
+    print("HyDE : ", hypothetical_answer)
+
+    # Retrieve the top-20 chunks
+    print("Retrieving context...")
+    top_chunks = retrieve_context(hypothetical_answer, embedder, chunks, index, k=30)
+
+    # Rerank to get the top-3 chunks
+    print("Reranking...")
+    reranked_chunks = reranker(question, top_chunks, k=3)
+
+    # Generate the prompt
+    messages = build_chat_messages_from_chunks(question, reranked_chunks)
+
+    # Generate the answer
     generation_args = { 
         "max_new_tokens": 500, 
         "return_full_text": False, 
         "temperature": 0.2,
         "do_sample": True, 
     } 
-
     output = pipe(messages, **generation_args)
-
     print(messages)
     print("--------------------------------")
     print(output[0]['generated_text']) 
-
-
-    # # Ask a question
-    # response, prompt = ask_question_with_chunks(question, reranked_chunks, tokenizer, model)
-
-    # print(response)
 

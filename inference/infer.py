@@ -127,8 +127,12 @@ def ask_question_with_chunks(question: str, chunks: list[str], tokenizer, model)
 
     with torch.no_grad():  # Disable gradient computation
         with torch.amp.autocast('cuda'):  # Mixed precision inference
-            encoded = tokenizer.encode_chat_completion(request)
-            tokens = encoded.tokens
+            # Tokenizing the question
+            encoded = tokenizer.encode(question, return_tensors="pt")
+
+            # Convert input_ids to tokens
+            tokens = tokenizer.convert_ids_to_tokens(encoded[0])  # Extract tokens from the batch
+
 
             print("After token encoding:")
             print_gpu_memory()
@@ -146,7 +150,8 @@ def ask_question_with_chunks(question: str, chunks: list[str], tokenizer, model)
                 tokens, model,
                 max_tokens=200,
                 temperature=0.7,
-                eos_id=tokenizer.instruct_tokenizer.tokenizer.eos_id
+                eos_id = tokenizer.eos_token_id
+
             )
 
             print("After generation:")
