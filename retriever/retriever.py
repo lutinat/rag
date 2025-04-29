@@ -9,6 +9,7 @@ from typing import List, Tuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+
 def find_close_chunks(embeddings: np.ndarray, chunks: list, similarity_threshold: float = 0.98):
     """
     Find and print chunks that are considered "close" based on cosine similarity of their embeddings,
@@ -45,6 +46,48 @@ def find_close_chunks(embeddings: np.ndarray, chunks: list, similarity_threshold
 
     return processed_indices
 
+
+def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list, similarity_threshold: float = 0.98):
+    """
+    Find and return indices of chunks considered "close" based on cosine similarity of their embeddings,
+    using FAISS for efficient search.
+    
+    Args:
+        embeddings: The embeddings of the text chunks.
+        chunks: The list of text chunks (corresponding to the embeddings).
+        similarity_threshold: The threshold above which chunks are considered duplicates.
+    
+    Returns:
+        processed_indices: Set of indices of duplicate chunks.
+    """
+    # Normalize embeddings for cosine similarity
+    faiss.normalize_L2(embeddings)
+
+    # Build FAISS index (Inner Product after normalization = Cosine similarity)
+    index = faiss.IndexFlatIP(embeddings.shape[1])
+    index.add(embeddings)
+
+    # Search for top 5 nearest neighbors
+    distances, indices = index.search(embeddings, 10)  # (n_chunks, 5)
+
+    processed_indices = set()
+
+    for i in range(len(chunks)):
+        if i in processed_indices:
+            continue
+
+        for j_idx, score in zip(indices[i], distances[i]):
+            if i == j_idx:
+                continue  # Skip self
+            if score >= similarity_threshold:
+                processed_indices.add(j_idx)
+                print("--------------------------------")
+                print(f"Chunk {i} is close to chunk {j_idx} with similarity {score}")
+                print(f"Chunk {i}: {chunks[i]}")
+                print(f"Chunk {j_idx}: {chunks[j_idx]}")
+                print("--------------------------------")
+
+    return processed_indices
 
 
 
@@ -83,7 +126,7 @@ def build_faiss_index(chunks: List[str], model_name: str = "intfloat/multilingua
     # Remove duplicates before saving the embeddings
     if save_embeddings or not os.path.exists(embeddings_file):
         # Find and remove duplicate chunks
-        duplicate_indices = find_close_chunks(embeddings, text_chunks)
+        duplicate_indices = find_close_chunks_faiss(embeddings, text_chunks)
         print(f"Found {len(duplicate_indices)} duplicate chunks using cosine similarity")
         
         # Collect the non-duplicate chunks and their embeddings

@@ -41,7 +41,7 @@ def download_model(model_path):
 #         f"Rewrite the following question to make it clearer and more specific, "
 #         f"without adding any new information or context:\n\n{question}"
 #     )
-    
+
 #     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
 #     output = model.generate(
@@ -73,12 +73,19 @@ def reranker(query, relevant_chunks, k=3):
 
     # Initialize the reranker with BGE-M3 model
     model = FlagReranker('BAAI/bge-reranker-v2-m3', use_fp16=True)
-    
-    # Score each chunk and keep its index
-    scored_chunks = [(i, score) for i, score in enumerate(
-        model.compute_score([[query, chunk["text"]] for chunk in relevant_chunks], normalize=True)
-    )]
 
+    # Build context blocks with metadata
+    scored_chunks = []
+    for i, chunk in enumerate(relevant_chunks):
+        meta = chunk.get("metadata", {})
+        meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items() if value)
+        formatted_block = (
+            f"### Document:\n"
+            f"**Metadata:**\n{meta_lines}\n"
+            f"**Content:**\n{chunk['text']}"
+        )
+        scored_chunks.append((i, model.compute_score([[query, formatted_block]])))
+        
     # Sort and select top-k
     top_k_indices = [i for i, _ in sorted(scored_chunks, key=lambda x: x[1], reverse=True)[:k]]
 
@@ -139,7 +146,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str]) -> list[dict]:
     context_blocks = []
     for i, chunk in enumerate(chunks):
         meta = chunk.get("metadata", {})
-        meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items())
+        meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items() if value)
         formatted_block = (
             f"### Context {i+1}\n"
             f"**Metadata:**\n{meta_lines if meta else '  - None'}\n"
@@ -237,11 +244,17 @@ if __name__ == "__main__":
     generation_args = { 
         "max_new_tokens": 500, 
         "return_full_text": False, 
-        "temperature": 0.2,
+        "temperature": 0.1,
         "do_sample": True, 
     } 
     output = pipe(messages, **generation_args)
     print(messages)
     print("--------------------------------")
-    print(output[0]['generated_text']) 
+    print(output[0]['generated_text'])
+
+    # Show the source (last top-k chunks)
+    # Create a set of filenames from the metadata
+    print("\nSources:")
+    for chunk in reranked_chunks:
+        print(f"- {chunk['metadata']['filename']}")
 

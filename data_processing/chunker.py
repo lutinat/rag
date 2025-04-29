@@ -1,13 +1,14 @@
 import re
 import spacy
 from typing import List, Dict
-from data_processing.utils import save_chunks_jsonl
+from .utils import save_chunks_jsonl
 import os
 from glob import glob
-from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf
+from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf, load_pdf_spacy
 from .pdf_loader import load_txt
 from tqdm import tqdm
-
+import subprocess
+import tempfile
 
 # Charger le modèle spaCy multilingue et ajouter le sentencizer
 nlp = spacy.load("xx_ent_wiki_sm")
@@ -101,8 +102,6 @@ def clean_text(text: str) -> str:
     # # S'assurer qu'il y a un espace après les points, points d'exclamation et points d'interrogation
     # text = re.sub(r'([.!?])\s*', r'\1 ', text)
 
-
-    
     return text.strip()
 
 def split_into_sentences(text: str) -> List[str]:
@@ -118,7 +117,13 @@ def create_paragraphs(text: str) -> List[str]:
     text = clean_text(text)
     
     # Diviser en phrases
-    sentences = split_into_sentences(text)
+    sentences = []
+    if len(text) > 1_000_000:
+        for i in range(0, len(text), 1_000_000):
+            chunk_sentences = split_into_sentences(text[i:i+1_000_000])
+            sentences.extend(chunk_sentences)
+    else:
+        sentences = split_into_sentences(text)
     
     # Créer des paragraphes
     paragraphs = []
@@ -232,6 +237,33 @@ def is_similar(text1: str, text2: str, threshold: float = 0.7) -> bool:
     return similarity > threshold
 
 
+# Function to download the PDF to a temporary directory
+def download_pdf_to_temp(remote_path):
+    # Create a temporary directory (automatically cleaned up)
+    temp_dir = "/home/lucasd/code/rag/data"  # Specify /tmp as the parent directory for the temp folder
+    # Construct the local path for the downloaded PDF
+    local_pdf_path = os.path.join(temp_dir, os.path.basename(remote_path))
+    
+    # Check if the file already exists
+    if os.path.exists(local_pdf_path):
+        raise Exception(f"File already exists: {local_pdf_path}")
+    
+    # Use rclone to download the PDF to the temp folder
+    subprocess.run(['rclone', 'copyto', remote_path, local_pdf_path], check=True)
+    
+    # Check if the path is a directory, not a file
+    if os.path.isdir(local_pdf_path):
+        print(f"Error: {local_pdf_path} is a directory, not a file.")
+        return None
+    
+    # Verify the file actually exists and is a valid file
+    if not os.path.isfile(local_pdf_path):
+        print(f"Error: {local_pdf_path} does not exist or is not a valid file.")
+        return None
+    
+    return local_pdf_path
+
+
 def get_all_chunks(folder_path: str, chunk_folder_path: str):
     """
     Process multiple PDFs, extract text and metadata, chunk the text, and save chunks to JSONL.
@@ -247,11 +279,31 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     all_chunks = []
     
     # PDF FILES
+    # List the files (you can filter for specific PDFs as well)
+    # remote = "Image Processing"
+    # result = subprocess.run(['rclone', 'lsf', '--files-only', '--include', '*.pdf', f'{remote}:', '--recursive'], stdout=subprocess.PIPE)
+    # Extract the file paths with the full remote path
+    # remote_pdf_paths = [f"{remote}:{line}" for line in result.stdout.decode().splitlines()]
+    # pdf_paths.extend(remote_pdf_paths)
     print(f"Processing {len(pdf_paths)} PDFs")
+
     for pdf_path in tqdm(pdf_paths):
-        # print(f"Processing {pdf_path}")
+        # # if remote, download the PDF to a temporary directory
+        # if pdf_path.startswith("Image Processing"):
+        #     try:
+        #         pdf_path = download_pdf_to_temp(pdf_path)
+        #     except Exception as e:
+        #         print(f"Failed to download {pdf_path}: {e}")
+        #         continue
+
+        print(f"Processing {pdf_path}")
         # Extract text and metadata
-        text = extract_text_from_pdf(pdf_path)
+        try:
+            text = load_pdf_spacy(pdf_path)
+        except Exception as e:
+            print(f"Failed to extract from {pdf_path}: {e}")
+            continue
+
         metadata = extract_metadata_from_pdf(pdf_path)
         
         # Extract chunks from the text
@@ -264,6 +316,9 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         
         # Save the chunks to JSONL
         save_chunks_jsonl(chunks, chunk_path)
+
+        # # delete the temporary directory
+        # os.remove(pdf_path)
 
     # TXT FILES
     print(f"Processing {len(txt_paths)} TXT files")
@@ -286,3 +341,9 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     
     print(f"Total chunks: {len(all_chunks)}")
     return all_chunks
+
+
+if __name__ == "__main__":
+    folder_path = "/home/lucasd/code/rag/data/data1"
+    chunk_folder_path = "/home/lucasd/code/rag/processed_data/processed_data1"
+    get_all_chunks(folder_path, chunk_folder_path)

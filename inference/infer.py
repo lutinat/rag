@@ -96,7 +96,7 @@ def load_mistral_pipeline(model_path: str):
 
 def ask_question_with_chunks(question: str, chunks: list[str], tokenizer, model) -> str:
     """
-    Ask a question using a list of context chunks with the Mistral model.
+    Ask a question using a list of context chunks with the model.
 
     Args:
         question: The question to ask

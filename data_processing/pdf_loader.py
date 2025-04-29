@@ -2,14 +2,73 @@ import pdfplumber
 import os
 from typing import Dict, List, Tuple
 import re
-import glob
-def load_pdf(pdf_path: str) -> str:
-    """Charge un fichier PDF et retourne son contenu textuel."""
-    text = ""
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() or ""
-    return text
+from glob import glob
+from office365.sharepoint.client_context import ClientContext
+from office365.runtime.auth.user_credential import UserCredential
+from getpass import getpass
+import spacy
+import pandas as pd
+import concurrent.futures
+from tqdm import tqdm
+
+from spacy_layout import spaCyLayout
+
+
+def load_pdf_spacy(pdf_path: str) -> str:
+    # Sample function to create a custom display of the table
+    def display_table(df: pd.DataFrame) -> str:
+        return f"Table with columns: {', '.join(df.columns.tolist())}"
+
+    nlp = spacy.load("xx_ent_wiki_sm")
+    layout = spaCyLayout(nlp)
+
+    # Process a document and create a spaCy Doc object
+    doc = layout(pdf_path)
+
+    # The text-based contents of the document
+    # print(doc.text)
+
+    # # Document layout including pages and page sizes
+    # print(doc._.layout)
+
+    # Tables in the document and their extracted data
+    # print(doc._.tables)
+
+    # Iterate through the tables in the document
+    # Markdown representation of the document
+    # print(doc._.markdown)
+
+    return doc.text
+
+
+def load_pdfs_spacy(pdf_path_list: List[str]) -> List[str]:
+    nlp = spacy.load("xx_ent_wiki_sm")
+    layout = spaCyLayout(nlp)
+
+    # Function to process PDF paths
+    def process_pdfs(pdf_paths):
+        return list(layout.pipe(pdf_paths))
+
+    # Number of processes
+    n_processes = 12
+
+    # Split the list of PDFs into chunks for parallel processing
+    chunk_size = len(pdf_path_list) // n_processes
+    chunks = [pdf_path_list[i:i + chunk_size] for i in range(0, len(pdf_path_list), chunk_size)]
+
+    # Now use tqdm for individual PDFs, not chunks
+    all_docs = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_processes) as executor:
+        # Use tqdm to show the progress of processing PDFs
+        for chunk_result in tqdm(executor.map(process_pdfs, chunks), total=len(pdf_path_list), desc="Processing PDFs", unit="pdf"):
+            all_docs.extend(chunk_result)  # Flatten the result from each chunk
+
+
+    # Process docs as needed
+    for doc in all_docs:
+        print(doc.text)
+
+
 
 def load_txt(txt_path: str) -> str:
     """Charge un fichier texte et retourne son contenu textuel."""
@@ -39,22 +98,22 @@ def clean_txt_file(input_path, output_path=None):
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """
-    Extrait le texte d'un PDF en conservant la structure et les titres.
+    Extrait le texte d'un PDF en conservant la structure et les titres, optimisé pour un traitement ultérieur avec SpaCy.
     
     Args:
         pdf_path: Chemin vers le fichier PDF
         
     Returns:
-        str: Texte extrait avec structure préservée
+        str: Texte extrait avec structure préservée pour traitement ultérieur.
     """
     text_blocks = []
     
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            # Extraire le texte avec les coordonnées
+            # Extraire les mots avec les coordonnées
             words = page.extract_words(
-                x_tolerance=3,  # Tolérance horizontale pour regrouper les mots
-                y_tolerance=3,  # Tolérance verticale pour regrouper les mots
+                x_tolerance=1,
+                y_tolerance=1,
                 keep_blank_chars=False,
                 use_text_flow=True,
                 horizontal_ltr=True,
@@ -65,7 +124,7 @@ def extract_text_from_pdf(pdf_path: str) -> str:
             # Grouper les mots par ligne
             lines = {}
             for word in words:
-                y = round(word['top'], 1)  # Arrondir pour grouper les lignes proches
+                y = round(word['top'], 1)  # Grouper les mots proches
                 if y not in lines:
                     lines[y] = []
                 lines[y].append(word)
@@ -79,19 +138,24 @@ def extract_text_from_pdf(pdf_path: str) -> str:
                 words.sort(key=lambda w: w['x0'])
                 line_text = ' '.join(w['text'] for w in words)
                 
-                # Détecter les titres (basé sur la taille de police et la position)
+                # Détecter les titres (plus précis avec un seuil de taille et une position)
                 is_title = any(
                     w['size'] > 12 for w in words  # Taille de police plus grande
                 ) or y < 100  # Position en haut de page
                 
                 if is_title:
-                    text_blocks.append(f"\n# {line_text}\n")
+                    # Marquer les titres de manière explicite
+                    text_blocks.append(f"\n## {line_text}\n")
                 else:
                     text_blocks.append(line_text)
             
             text_blocks.append("\n")  # Saut de page
     
-    return "\n".join(text_blocks)
+    # Retourner le texte brut, normalisé
+    raw_text = "\n".join(text_blocks)
+    clean_text = " ".join(raw_text.split())  # Normaliser les espaces excessifs
+    return clean_text
+
 
 def extract_metadata_from_pdf(pdf_path: str) -> Dict:
     """
@@ -203,15 +267,54 @@ def get_metadata_plumberpdf(pdf_path: str) -> Dict:
 
 
 if __name__ == "__main__":
-    pdf_files = glob.glob("/home/lucasd/code/rag/data/*.pdf")
-    s = 0
-    for pdf_file in pdf_files:
-        print(pdf_file)
-        title = get_title_from_pdf(pdf_file)
-        print(f"\n\nTitle: {title}")
-        if not title:
-            s += 1
+    from msal import ConfidentialClientApplication
+    import requests
 
-        metadata = get_metadata_plumberpdf(pdf_file)
-        print(f"Metadata: {metadata}")
-    print(f"Number of files with no title: {s}")
+    client_id = ""
+    tenant_id = ""
+    client_secret = ""
+    authority = ""
+    scopes = ""
+
+    app = ConfidentialClientApplication(client_id=client_id, authority=authority, client_credential=client_secret)
+
+  # Acquire token using client credentials flow (no need for user interaction)
+    result = app.acquire_token_for_client(scopes=scopes)
+
+    if "access_token" in result:
+        # Successfully obtained access token, now you can make requests
+        headers = {
+            "Authorization": f"Bearer {result['access_token']}"
+        }
+        
+        # Make API call to get files from your SharePoint folder
+        site_url = "https://satlantis.sharepoint.com/sites/ImgProcss"
+        api = f"{site_url}/_api/web/GetFolderByServerRelativeUrl('Documents')/Files"
+
+        resp = requests.get(api, headers=headers)
+        if resp.ok:
+            files = resp.json()["value"]
+            for file in files:
+                print(file["Name"])
+        else:
+            print("Error:", resp.status_code, resp.text)
+    else:
+        print("Failed to acquire token:", result.get("error_description"))
+
+    # Print PDF files only
+    for file in files:
+        if file.properties["Name"].lower().endswith(".pdf"):
+            print(file.properties["Name"])
+
+    
+    # s = 0
+    # for pdf_file in pdf_files:
+    #     print(pdf_file)
+    #     title = get_title_from_pdf(pdf_file)
+    #     print(f"\n\nTitle: {title}")
+    #     if not title:
+    #         s += 1
+
+    #     metadata = get_metadata_plumberpdf(pdf_file)
+    #     print(f"Metadata: {metadata}")
+    # print(f"Number of files with no title: {s}")
