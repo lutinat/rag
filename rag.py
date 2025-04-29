@@ -207,11 +207,6 @@ if __name__ == "__main__":
     tokenizer=tokenizer, 
     ) 
 
-    # # Download the model if it's not already downloaded
-    # if not os.path.exists(model_path):
-    #     print(f"Downloading model to {model_path}...")
-    # model_path = download_model(model_path)
-
     # Extract and save chunks
     if recompute_embeddings:
         chunks = get_all_chunks("/home/lucasd/code/rag/data", "/home/lucasd/code/rag/processed_data")
