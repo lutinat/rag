@@ -3,6 +3,7 @@ import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
 from typing import List, Tuple
 
 
@@ -144,14 +145,15 @@ def build_faiss_index(chunks: List[str],
     if save_embeddings or not os.path.exists(embeddings_file):
         print(f"Saving embeddings to {embeddings_file}...")
         np.save(embeddings_file, updated_embeddings)  # Save embeddings as .npy file
-    
+
     # Create and build the FAISS index
     print("Building FAISS index...")
     dimension = updated_embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(updated_embeddings)
+    normalized_embeddings = normalize(updated_embeddings, axis=1)
+    index = faiss.IndexFlatIP(dimension)
+    index.add(normalized_embeddings)
     
-    return index, updated_embeddings, updated_chunks, model
+    return index, normalized_embeddings, updated_chunks, model
 
 
 def retrieve_context(question: str, 
@@ -174,11 +176,14 @@ def retrieve_context(question: str,
     """
     
     # Generate embedding for the question
-    question_embedding = embedder.encode([question])
-    question_embedding = np.array(question_embedding).astype('float32')
+    query_emb = embedder.encode(question)
+    query_emb = np.array(query_emb).astype('float32')
+
+    # normalize the query embedding
+    query_emb = normalize(query_emb, normalize_embeddings=False)
     
     # Search for similar chunks
-    distances, indices = index.search(question_embedding, k)
+    distances, indices = index.search(query_emb, k)
     
     # Get the most relevant chunks
     relevant_chunks = [chunks[i] for i in indices[0]]

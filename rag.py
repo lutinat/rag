@@ -14,7 +14,7 @@ hf_token = os.getenv("HF_TOKEN")
 login(hf_token)
 
 # Paths
-chunk_path = "processed_data/all_chunks.jsonl"
+chunk_path = "/home/lucasd/code/rag/processed_data"
 
 
 def reranker(query, relevant_chunks, k=3):
