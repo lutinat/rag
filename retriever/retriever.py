@@ -3,15 +3,10 @@ import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import normalize
 from typing import List, Tuple
 
 
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-
-
-def find_close_chunks(embeddings: np.ndarray, chunks: list, similarity_threshold: float = 0.98):
+def find_close_chunks(embeddings: np.ndarray, chunks: list[dict], similarity_threshold: float = 0.98):
     """
     Find and print chunks that are considered "close" based on cosine similarity of their embeddings,
     while avoiding printing duplicate chunks.
@@ -48,7 +43,7 @@ def find_close_chunks(embeddings: np.ndarray, chunks: list, similarity_threshold
     return processed_indices
 
 
-def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list, similarity_threshold: float = 0.98):
+def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list[dict], similarity_threshold: float = 0.98):
     """
     Find and return indices of chunks considered "close" based on cosine similarity of their embeddings,
     using FAISS for efficient search.
@@ -68,8 +63,8 @@ def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list, similarity_thr
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
 
-    # Search for top 5 nearest neighbors
-    distances, indices = index.search(embeddings, 10)  # (n_chunks, 5)
+    # Search for top 10 nearest neighbors
+    distances, indices = index.search(embeddings, 10)
 
     processed_indices = set()
 
@@ -92,10 +87,10 @@ def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list, similarity_thr
 
 
 
-def build_faiss_index(chunks: List[str], 
+def build_faiss_index(chunks: List[dict], 
                       model_name: str = "intfloat/multilingual-e5-large-instruct", 
                       save_embeddings: bool = False, 
-                      embeddings_folder: str = "/home/lucasd/code/rag/embeddings") -> Tuple[faiss.IndexFlatL2, np.ndarray, SentenceTransformer]:
+                      embeddings_folder: str = "/home/lucasd/code/rag/embeddings") -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
     """
     Build a FAISS index from text chunks using sentence embeddings.
     
@@ -129,6 +124,7 @@ def build_faiss_index(chunks: List[str],
 
     # Remove duplicates before saving the embeddings
     if save_embeddings or not os.path.exists(embeddings_file):
+        print("Finding duplicate chunks...")
         # Find and remove duplicate chunks
         duplicate_indices = find_close_chunks_faiss(embeddings, text_chunks)
         print(f"Found {len(duplicate_indices)} duplicate chunks using cosine similarity")
@@ -149,18 +145,18 @@ def build_faiss_index(chunks: List[str],
     # Create and build the FAISS index
     print("Building FAISS index...")
     dimension = updated_embeddings.shape[1]
-    normalized_embeddings = normalize(updated_embeddings, axis=1)
+    faiss.normalize_L2(updated_embeddings)  # Normalize embeddings for cosine similarity
     index = faiss.IndexFlatIP(dimension)
-    index.add(normalized_embeddings)
+    index.add(updated_embeddings)
     
-    return index, normalized_embeddings, updated_chunks, model
+    return index, updated_embeddings, updated_chunks, model
 
 
 def retrieve_context(question: str, 
                      embedder: SentenceTransformer, 
-                     chunks: List[str], 
-                     index: faiss.IndexFlatL2,
-                     k: int = 5) -> str:
+                     chunks: List[dict], 
+                     index: faiss.IndexFlatIP,
+                     k: int = 30) -> str:
     """
     Retrieve relevant context for a question using FAISS similarity search.
     
@@ -176,11 +172,12 @@ def retrieve_context(question: str,
     """
     
     # Generate embedding for the question
-    query_emb = embedder.encode(question)
+    query_emb = embedder.encode(question, normalize_embeddings=False)
     query_emb = np.array(query_emb).astype('float32')
 
     # normalize the query embedding
-    query_emb = normalize(query_emb, normalize_embeddings=False)
+    query_emb = query_emb.reshape(1, -1)
+    faiss.normalize_L2(query_emb)
     
     # Search for similar chunks
     distances, indices = index.search(query_emb, k)
