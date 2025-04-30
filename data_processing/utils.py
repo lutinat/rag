@@ -1,5 +1,6 @@
 import json
 
+
 def save_chunks_jsonl(chunks, path):
     with open(path, "w") as f:
         for chunk in chunks:

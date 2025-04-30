@@ -34,14 +34,15 @@ def load_pdf_spacy(pdf_path: str) -> str:
     # Tables in the document and their extracted data
     # print(doc._.tables)
 
-    # Iterate through the tables in the document
-    # Markdown representation of the document
+    #Iterate through the tables in the document
+    #Markdown representation of the document
     # print(doc._.markdown)
 
     return doc.text
 
 
 def load_pdfs_spacy(pdf_path_list: List[str]) -> List[str]:
+    #TODO: Not working
     nlp = spacy.load("xx_ent_wiki_sm")
     layout = spaCyLayout(nlp)
 
@@ -63,15 +64,12 @@ def load_pdfs_spacy(pdf_path_list: List[str]) -> List[str]:
         for chunk_result in tqdm(executor.map(process_pdfs, chunks), total=len(pdf_path_list), desc="Processing PDFs", unit="pdf"):
             all_docs.extend(chunk_result)  # Flatten the result from each chunk
 
-
-    # Process docs as needed
-    for doc in all_docs:
-        print(doc.text)
+    return all_docs
 
 
 
-def load_txt(txt_path: str) -> str:
-    """Charge un fichier texte et retourne son contenu textuel."""
+def load_txt_web(txt_path: str) -> str:
+    """Loads a text file and returns its content as a string."""
     with open(txt_path, 'r', encoding='utf-8') as f:
         return f.read()
 
@@ -98,22 +96,22 @@ def clean_txt_file(input_path, output_path=None):
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """
-    Extrait le texte d'un PDF en conservant la structure et les titres, optimisé pour un traitement ultérieur avec SpaCy.
+    Extract text from pdf using pdfplumber
     
     Args:
-        pdf_path: Chemin vers le fichier PDF
+        pdf_path: Path to the PDF file
         
     Returns:
-        str: Texte extrait avec structure préservée pour traitement ultérieur.
+        str: Extracted text
     """
     text_blocks = []
     
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            # Extraire les mots avec les coordonnées
+            # Extract words with their positions (top, bottom, left, right)
             words = page.extract_words(
-                x_tolerance=1,
-                y_tolerance=1,
+                x_tolerance=2,
+                y_tolerance=2,
                 keep_blank_chars=False,
                 use_text_flow=True,
                 horizontal_ltr=True,
@@ -121,51 +119,51 @@ def extract_text_from_pdf(pdf_path: str) -> str:
                 extra_attrs=["fontname", "size"]
             )
             
-            # Grouper les mots par ligne
+            # Group words by line
             lines = {}
             for word in words:
-                y = round(word['top'], 1)  # Grouper les mots proches
+                y = round(word['top'], 1)  # Group close words
                 if y not in lines:
                     lines[y] = []
                 lines[y].append(word)
             
-            # Trier les lignes par position verticale
+            # Sort lines by their vertical position
             sorted_lines = sorted(lines.items())
             
-            # Reconstruire le texte avec la structure
+            # Reconstruct text from lines
             for y, words in sorted_lines:
-                # Trier les mots de gauche à droite
+                # Sort words from left to right
                 words.sort(key=lambda w: w['x0'])
                 line_text = ' '.join(w['text'] for w in words)
                 
-                # Détecter les titres (plus précis avec un seuil de taille et une position)
+                # Detect titles based on font size and position
                 is_title = any(
-                    w['size'] > 12 for w in words  # Taille de police plus grande
-                ) or y < 100  # Position en haut de page
+                    w['size'] > 12 for w in words
+                ) or y < 100
                 
                 if is_title:
-                    # Marquer les titres de manière explicite
+                    # Mark the title with a specific format
                     text_blocks.append(f"\n## {line_text}\n")
                 else:
                     text_blocks.append(line_text)
             
-            text_blocks.append("\n")  # Saut de page
+            text_blocks.append("\n")  # 
     
-    # Retourner le texte brut, normalisé
+    # Retyrn the text as a single string
     raw_text = "\n".join(text_blocks)
-    clean_text = " ".join(raw_text.split())  # Normaliser les espaces excessifs
+    clean_text = " ".join(raw_text.split())
     return clean_text
 
 
 def extract_metadata_from_pdf(pdf_path: str) -> Dict:
     """
-    Extrait les métadonnées du PDF.
+    Extract metadata from pdf using pdfplumber
     
     Args:
-        pdf_path: Chemin vers le fichier PDF
+        pdf_path: Path to the PDF file
         
     Returns:
-        Dict: Métadonnées extraites
+        Dict: Extracted metadata
     """
     metadata = {
         "title_from_pdf": None,
@@ -178,7 +176,11 @@ def extract_metadata_from_pdf(pdf_path: str) -> Dict:
     }
     
     # Get filename and title from pdf
-    title_from_pdf = get_title_from_pdf(pdf_path)
+    try:
+        title_from_pdf = get_title_from_pdf(pdf_path)
+    except Exception as e:
+        print(f"Error extracting title from PDF: {e}")
+        title_from_pdf = None
     filename = os.path.basename(pdf_path)
     metadata["title_from_pdf"] = title_from_pdf
     metadata["filename"] = filename

@@ -1,16 +1,9 @@
-from data_processing.chunker import extract_chunks
-from data_processing.pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf, load_txt
-from data_processing.utils import save_chunks_jsonl, load_chunks_jsonl
-from retriever.retriever import build_faiss_index, retrieve_context
-from inference.infer import load_mistral_pipeline, ask_question_with_chunks
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-from sentence_transformers import SentenceTransformer, util
-import torch
-from huggingface_hub import snapshot_download, login
-from pathlib import Path
 import sys
 import os
-from glob import glob
+from data_processing.utils import save_chunks_jsonl, load_chunks_jsonl
+from retriever.retriever import build_faiss_index, retrieve_context
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from huggingface_hub import login
 from FlagEmbedding import FlagReranker
 from data_processing.chunker import get_all_chunks
 from dotenv import load_dotenv
@@ -21,41 +14,7 @@ hf_token = os.getenv("HF_TOKEN")
 login(hf_token)
 
 # Paths
-pdf_path = "/home/lucasd/code/rag/data/proposal_polarisat.pdf"
-chunk_path = "/home/lucasd/code/rag/processed_data/all_chunks.jsonl"
-
-
-def download_model(model_path):
-    model_path = Path(model_path)  # Assure-toi que c'est un Path
-    if not model_path.exists():
-        model_path.mkdir(parents=True, exist_ok=True)
-        snapshot_download(
-            repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-            allow_patterns=["params.json", "consolidated.safetensors", "tokenizer.model.v3"],
-            local_dir=model_path
-        )
-    return model_path
-
-# def rewrite_question(question: str, model, tokenizer) -> str:
-#     prompt = (
-#         f"Rewrite the following question to make it clearer and more specific, "
-#         f"without adding any new information or context:\n\n{question}"
-#     )
-
-#     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
-#     output = model.generate(
-#         **inputs,
-#         max_new_tokens=100,
-#         temperature=0.3,
-#         do_sample=False,
-#         num_beams=4,
-#         early_stopping=True,
-#     )
-
-#     rewritten = tokenizer.decode(output[0], skip_special_tokens=True)
-#     return rewritten.strip()
-
+chunk_path = "processed_data/all_chunks.jsonl"
 
 
 def reranker(query, relevant_chunks, k=3):
@@ -184,7 +143,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str]) -> list[dict]:
 
 if __name__ == "__main__":
 
-    # Parse the arguments
+    # Parse the argumentsj
     if len(sys.argv) < 2:
         print("Usage: python rag.py <question> [-s] (optional)")
         sys.exit(1)
@@ -205,7 +164,11 @@ if __name__ == "__main__":
     "text-generation", 
     model=model, 
     tokenizer=tokenizer, 
-    ) 
+    )
+
+    # Generate the hypothetical answer (HyDE)
+    hypothetical_answer = hyDE(question, pipe)
+    print("HyDE : ", hypothetical_answer)
 
     # Extract and save chunks
     if recompute_embeddings:
@@ -213,16 +176,13 @@ if __name__ == "__main__":
     else:
         chunks = load_chunks_jsonl(chunk_path)
 
+
     # Generate the embeddings, remove duplicates and build the FAISS index
     index, embeddings, chunks, embedder = build_faiss_index(chunks, save_embeddings=recompute_embeddings)
     if recompute_embeddings:
         # Save all chunks to a single JSONL file
         save_chunks_jsonl(chunks, chunk_path)
         print(f"Saved all chunks to {chunk_path}")
-
-    # Generate the hypothetical answer (HyDE)
-    hypothetical_answer = hyDE(question, pipe)
-    print("HyDE : ", hypothetical_answer)
 
     # Retrieve the top-20 chunks
     print("Retrieving context...")

@@ -91,7 +91,10 @@ def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list, similarity_thr
 
 
 
-def build_faiss_index(chunks: List[str], model_name: str = "intfloat/multilingual-e5-large-instruct", save_embeddings: bool = False, embeddings_folder: str = "/home/lucasd/code/rag/embeddings") -> Tuple[faiss.IndexFlatL2, np.ndarray, SentenceTransformer]:
+def build_faiss_index(chunks: List[str], 
+                      model_name: str = "intfloat/multilingual-e5-large-instruct", 
+                      save_embeddings: bool = False, 
+                      embeddings_folder: str = "/home/lucasd/code/rag/embeddings") -> Tuple[faiss.IndexFlatL2, np.ndarray, SentenceTransformer]:
     """
     Build a FAISS index from text chunks using sentence embeddings.
     
@@ -152,10 +155,10 @@ def build_faiss_index(chunks: List[str], model_name: str = "intfloat/multilingua
 
 
 def retrieve_context(question: str, 
-                    embedder: SentenceTransformer, 
-                    chunks: List[str], 
-                    index: faiss.IndexFlatL2,
-                    k: int = 5) -> str:
+                     embedder: SentenceTransformer, 
+                     chunks: List[str], 
+                     index: faiss.IndexFlatL2,
+                     k: int = 5) -> str:
     """
     Retrieve relevant context for a question using FAISS similarity search.
     
