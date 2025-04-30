@@ -12,5 +12,5 @@ The model uses a combination of retrieval and generation to generate answers to 
 - HyDE : microsoft/Phi-4-mini-instruct
 - Embedder: intfloat/multilingual-e5-large-instruct
 - Retrieval : FAISS
-- reranker : BAAI/bge-reranker-v2-m3
+- Reranker : BAAI/bge-reranker-v2-m3
 - Generator: microsoft/Phi-4-mini-instruct
