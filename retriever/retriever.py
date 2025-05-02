@@ -29,9 +29,9 @@ def build_faiss_index(chunks: List[dict],
     """
     # Generate embeddings for the chunks
     updated_embeddings, updated_chunks, embedder = generate_embeddings(embeddings_folder, 
-                                                                    chunks, 
-                                                                    model_name=model_name, 
-                                                                    save_embeddings=save_embeddings)
+                                                                       chunks, 
+                                                                       model_name=model_name, 
+                                                                       save_embeddings=save_embeddings)
 
     # Create and build the FAISS index
     print("Building FAISS index...")
@@ -92,7 +92,7 @@ def reranker(model_name: str, query, relevant_chunks, k=3):
     - list of str: Top-k ranked chunks based on relevance to the query.
     """
 
-    # Initialize the reranker with BGE-M3 model
+    # Initialize the reranker
     model = FlagReranker(model_name, use_fp16=True)
 
     # Build context blocks with metadata

@@ -34,14 +34,11 @@ if __name__ == "__main__":
     # Check if the flag for saving embeddings (-s) is provided
     recompute_embeddings = '-s' in sys.argv[2:]
 
-    # Load the Phi-4-mini-instruct model
-    model_path = "microsoft/Phi-4-mini-instruct"
-
     # Generate the hypothetical answer (HyDE)
     hyde_answer = hyDE(question, model_name=phi4_model)
     print("HyDE : ", hyde_answer)
 
-    # Extract and save chunks
+    # Extract and save chunks from the documents
     if recompute_embeddings:
         chunks = get_all_chunks("/home/lucasd/code/rag/data", "/home/lucasd/code/rag/processed_data")
     else:
