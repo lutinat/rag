@@ -10,6 +10,7 @@ The model uses a combination of retrieval and generation to generate answers to 
 
 ## Pipeline
 This graph explains the current pipeline that is implemented.
+
 ![RAG pipeline](doc/image.png)
 
 ## Models used
