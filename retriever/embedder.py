@@ -2,8 +2,10 @@ import os
 import numpy as np
 import faiss
 from typing import List, Tuple
-from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
+import torch
+from utils import free_model_memory
 
 def load_embedder(model_name="intfloat/multilingual-e5-large-instruct"):
     return SentenceTransformer(model_name)
@@ -59,10 +61,12 @@ def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list[dict], similari
 def generate_embeddings(embeddings_folder: str, 
                         chunks: List[dict], 
                         model_name: str = "intfloat/multilingual-e5-large-instruct", 
-                        save_embeddings: bool = False) -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
+                        save_embeddings: bool = False,
+                        batch_size: int = 32) -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
     
     # Initialize the sentence transformer model
-    model = SentenceTransformer(model_name)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = SentenceTransformer(model_name, device=device)
 
     # Prepare text list
     text_chunks = [c["text"] for c in chunks]
@@ -71,8 +75,23 @@ def generate_embeddings(embeddings_folder: str,
     embeddings_file = os.path.join(embeddings_folder, "embeddings.npy")
     if save_embeddings or not os.path.exists(embeddings_file):
         print("Generating embeddings...")
-        embeddings = model.encode(text_chunks)
-        embeddings = np.array(embeddings).astype('float32')
+        embeddings = []
+        for i in tqdm(range(0, len(text_chunks), batch_size)):
+            # Process in batches
+            batch = text_chunks[i:i + batch_size]
+            batch_embeddings = model.encode(batch)
+
+            embeddings.append(batch_embeddings)
+            
+            # Free memory for the current batch after processing
+            del batch_embeddings  # Delete temporary batch embeddings
+            torch.cuda.empty_cache()  # Clear GPU memory if using GPU
+
+        embeddings = np.vstack(embeddings).astype('float32')
+        
+        # Free memory for the full embeddings
+        del batch  # Delete the batch reference after processing
+        torch.cuda.empty_cache()  # Clear GPU memory after all batches processed
     else:
         print("Loading embeddings...")
         embeddings = np.load(embeddings_file)

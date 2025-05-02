@@ -186,7 +186,7 @@ def create_paragraphs(text: str) -> List[str]:
     return clean_paragraphs, clean_sentences
 
 def create_chunks_from_sentences(sentences: List[str], 
-                                overlap: int = 0.75,
+                                overlap: int = 0.2,
                                 min_chunk_tokens: int = 300,
                                 max_chunk_tokens: int = 500, 
                                 source_name: str = "document.pdf",
@@ -283,7 +283,7 @@ def extract_chunks(text: str, source_name: str, metadata: Dict) -> List[Dict]:
     # Create chunks from the sentences
     chunks = create_chunks_from_sentences(
         sentences,
-        overlap=0.75,     # 50% overlap
+        overlap=0.2,     # 20% overlap
         min_chunk_tokens=200,
         max_chunk_tokens=500, 
         source_name=source_name,
@@ -351,7 +351,7 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         print(f"Processing {pdf_path}")
         # Extract text and metadata
         try:
-            text = extract_text_from_pdf(pdf_path)
+            text = load_pdf_spacy(pdf_path)
         except Exception as e:
             print(f"Failed to extract from {pdf_path}: {e}")
             continue

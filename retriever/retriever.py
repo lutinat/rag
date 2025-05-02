@@ -6,6 +6,7 @@ from typing import List, Tuple
 from retriever.embedder import generate_embeddings
 from FlagEmbedding import FlagReranker
 from typing import List, Tuple
+from utils import free_model_memory
 
 
 def build_faiss_index(chunks: List[dict], 
@@ -65,6 +66,9 @@ def retrieve_context(question: str,
     # Generate embedding for the question
     query_emb = embedder.encode(question, normalize_embeddings=False)
     query_emb = np.array(query_emb).astype('float32')
+
+    # Free up GPU memory
+    free_model_memory(embedder)
 
     # normalize the query embedding
     query_emb = query_emb.reshape(1, -1)
