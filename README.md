@@ -12,7 +12,7 @@ The model combines retrieval and generation steps. It first retrieves a set of r
 ## Pipeline
 The diagram below illustrates the current pipeline implementation:
 
-![RAG pipeline](doc/image.png)
+![RAG pipeline](doc/pipeline.png)
 
 ## Models used
 - HyDE : microsoft/Phi-4-mini-instruct
