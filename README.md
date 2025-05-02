@@ -8,6 +8,10 @@ This repository contains code for a Retrieval-Augmented Generation (RAG) model f
 ## How it works
 The model uses a combination of retrieval and generation to generate answers to questions. First, it uses a retrieval model to retrieve a set of relevant documents from a corpus based on the question. Then, it uses a generation model to generate an answer based on the retrieved documents.
 
+## Pipeline
+This graph explains the current pipeline that is implemented.
+![RAG pipeline](doc/image.png)
+
 ## Models used
 - HyDE : microsoft/Phi-4-mini-instruct
 - Embedder: intfloat/multilingual-e5-large-instruct
