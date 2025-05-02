@@ -1,16 +1,16 @@
+# Ignore data and config files
 *.pdf
 *.txt
 *.json
 *.jsonl
-*.ipynb
 *.npy
 .env
 
-
-# Ignore all files in the inference directory
+# Ignore all files in the inference/models directory
 inference/models/
 
-# Ignore Pycache
+# Ignore Python cache
 __pycache__/
 
-
+# Allow requirements.txt (in case of wildcard ignores above)
+!requirements.txt
