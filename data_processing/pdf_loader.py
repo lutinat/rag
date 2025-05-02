@@ -42,7 +42,7 @@ def load_pdf_spacy(pdf_path: str) -> str:
 
 
 def load_pdfs_spacy(pdf_path_list: List[str]) -> List[str]:
-    #TODO: Not working
+    # TODO: Not working
     nlp = spacy.load("xx_ent_wiki_sm")
     layout = spaCyLayout(nlp)
 
@@ -72,6 +72,7 @@ def load_txt_web(txt_path: str) -> str:
     """Loads a text file and returns its content as a string."""
     with open(txt_path, 'r', encoding='utf-8') as f:
         return f.read()
+
 
 def clean_txt_file(input_path, output_path=None):
     unwanted_lines = {

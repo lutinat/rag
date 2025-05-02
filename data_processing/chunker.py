@@ -1,14 +1,13 @@
 import re
 import spacy
 from typing import List, Dict
-from .utils import save_chunks_jsonl
+from utils import save_chunks_jsonl
 import os
 from glob import glob
 from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf, load_pdf_spacy
 from .pdf_loader import load_txt_web
 from tqdm import tqdm
 import subprocess
-import tempfile
 import numpy as np
 
 # Load the spaCy model for sentence segmentation
@@ -187,7 +186,7 @@ def create_paragraphs(text: str) -> List[str]:
     return clean_paragraphs, clean_sentences
 
 def create_chunks_from_sentences(sentences: List[str], 
-                                overlap: int = 0.5,
+                                overlap: int = 0.75,
                                 min_chunk_tokens: int = 300,
                                 max_chunk_tokens: int = 500, 
                                 source_name: str = "document.pdf",
@@ -284,7 +283,7 @@ def extract_chunks(text: str, source_name: str, metadata: Dict) -> List[Dict]:
     # Create chunks from the sentences
     chunks = create_chunks_from_sentences(
         sentences,
-        overlap=0.5,     # 50% overlap
+        overlap=0.75,     # 50% overlap
         min_chunk_tokens=200,
         max_chunk_tokens=500, 
         source_name=source_name,

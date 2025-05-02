@@ -2,100 +2,21 @@ import os
 import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+from typing import List, Tuple
+from retriever.embedder import generate_embeddings
+from FlagEmbedding import FlagReranker
 from typing import List, Tuple
 
 
-def find_close_chunks(embeddings: np.ndarray, chunks: list[dict], similarity_threshold: float = 0.98):
-    """
-    Find and print chunks that are considered "close" based on cosine similarity of their embeddings,
-    while avoiding printing duplicate chunks.
-
-    Args:
-        embeddings: The embeddings of the text chunks.
-        chunks: The list of text chunks (corresponding to the embeddings).
-        similarity_threshold: The threshold above which chunks are considered duplicates.
-
-    Prints:
-        Close chunks that are above the similarity threshold, removing duplicates.
-    
-    Returns:
-        updated_chunks: List of unique chunks that were not considered duplicates.
-        updated_embeddings: Corresponding embeddings of the unique chunks.
-    """
-    # Calculate cosine similarity matrix
-    similarities = cosine_similarity(embeddings)
-    
-    # A set to keep track of processed chunk indices to avoid printing duplicates
-    processed_indices = set()
-
-    for i in range(len(chunks)):
-        # Skip if the chunk is already processed
-        if i in processed_indices:
-            continue
-
-        for j in range(i + 1, len(chunks)):  # Avoid redundant checks (i, j) and (j, i)
-            sim = similarities[i, j]
-            if sim >= similarity_threshold:
-                # Add index to the processed set to avoid checking them again
-                processed_indices.add(j)
-
-    return processed_indices
-
-
-def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list[dict], similarity_threshold: float = 0.98):
-    """
-    Find and return indices of chunks considered "close" based on cosine similarity of their embeddings,
-    using FAISS for efficient search.
-    
-    Args:
-        embeddings: The embeddings of the text chunks.
-        chunks: The list of text chunks (corresponding to the embeddings).
-        similarity_threshold: The threshold above which chunks are considered duplicates.
-    
-    Returns:
-        processed_indices: Set of indices of duplicate chunks.
-    """
-    # Normalize embeddings for cosine similarity
-    faiss.normalize_L2(embeddings)
-
-    # Build FAISS index (Inner Product after normalization = Cosine similarity)
-    index = faiss.IndexFlatIP(embeddings.shape[1])
-    index.add(embeddings)
-
-    # Search for top 10 nearest neighbors
-    distances, indices = index.search(embeddings, 10)
-
-    processed_indices = set()
-
-    for i in range(len(chunks)):
-        if i in processed_indices:
-            continue
-
-        for j_idx, score in zip(indices[i], distances[i]):
-            if i == j_idx:
-                continue  # Skip self
-            if score >= similarity_threshold:
-                processed_indices.add(j_idx)
-                print("--------------------------------")
-                print(f"Chunk {i} is close to chunk {j_idx} with similarity {score}")
-                print(f"Chunk {i}: {chunks[i]}")
-                print(f"Chunk {j_idx}: {chunks[j_idx]}")
-                print("--------------------------------")
-
-    return processed_indices
-
-
-
 def build_faiss_index(chunks: List[dict], 
-                      model_name: str = "intfloat/multilingual-e5-large-instruct", 
-                      save_embeddings: bool = False, 
-                      embeddings_folder: str = "/home/lucasd/code/rag/embeddings") -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
+                      model_name: str, 
+                      embeddings_folder: str, 
+                      save_embeddings: bool = False) -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
     """
     Build a FAISS index from text chunks using sentence embeddings.
     
     Args:
-        text_chunks: List of text chunks to index
+        text_chunks: List of chunks to be indexed
         model_name: Name of the sentence transformer model to use
         save_embeddings: Whether to save the embeddings to a file
         embeddings_file: The file path to save the embeddings if `save_embeddings` is True
@@ -104,43 +25,13 @@ def build_faiss_index(chunks: List[dict],
         Tuple containing:
         - FAISS index
         - Embeddings array
-        - Sentence transformer model
+        - Embedder model to use the same model for queries
     """
-    # Initialize the sentence transformer model
-    model = SentenceTransformer(model_name)
-
-    # Prepare text list
-    text_chunks = [c["text"] for c in chunks]
-    
-    # Generate embeddings for all chunks
-    embeddings_file = os.path.join(embeddings_folder, "embeddings.npy")
-    if save_embeddings or not os.path.exists(embeddings_file):
-        print("Generating embeddings...")
-        embeddings = model.encode(text_chunks)
-        embeddings = np.array(embeddings).astype('float32')
-    else:
-        print("Loading embeddings...")
-        embeddings = np.load(embeddings_file)
-
-    # Remove duplicates before saving the embeddings
-    if save_embeddings or not os.path.exists(embeddings_file):
-        print("Finding duplicate chunks...")
-        # Find and remove duplicate chunks
-        duplicate_indices = find_close_chunks_faiss(embeddings, text_chunks)
-        print(f"Found {len(duplicate_indices)} duplicate chunks using cosine similarity")
-        
-        # Collect the non-duplicate chunks and their embeddings
-        updated_embeddings = embeddings[[i for i in range(len(embeddings)) if i not in duplicate_indices]]
-        updated_chunks = [chunks[i] for i in range(len(chunks)) if i not in duplicate_indices]
-    else:
-        updated_embeddings = embeddings
-        updated_chunks = chunks
-        duplicate_indices = []
-
-    # Save the embeddings
-    if save_embeddings or not os.path.exists(embeddings_file):
-        print(f"Saving embeddings to {embeddings_file}...")
-        np.save(embeddings_file, updated_embeddings)  # Save embeddings as .npy file
+    # Generate embeddings for the chunks
+    updated_embeddings, updated_chunks, embedder = generate_embeddings(embeddings_folder, 
+                                                                    chunks, 
+                                                                    model_name=model_name, 
+                                                                    save_embeddings=save_embeddings)
 
     # Create and build the FAISS index
     print("Building FAISS index...")
@@ -149,7 +40,7 @@ def build_faiss_index(chunks: List[dict],
     index = faiss.IndexFlatIP(dimension)
     index.add(updated_embeddings)
     
-    return index, updated_embeddings, updated_chunks, model
+    return index, updated_embeddings, updated_chunks, embedder
 
 
 def retrieve_context(question: str, 
@@ -186,3 +77,37 @@ def retrieve_context(question: str,
     relevant_chunks = [chunks[i] for i in indices[0]]
     
     return relevant_chunks
+
+
+def reranker(model_name: str, query, relevant_chunks, k=3):
+    """
+    Rerank the top chunks and return the top-k based on similarity to the query using BGE-M3 via FlagReranker.
+
+    Parameters:
+    - query (str): The input query.
+    - relevant_chunks (list of dict): A list of chunks. Contains the text and the metadata.
+    - k (int): The number of top chunks to return.
+
+    Returns:
+    - list of str: Top-k ranked chunks based on relevance to the query.
+    """
+
+    # Initialize the reranker with BGE-M3 model
+    model = FlagReranker(model_name, use_fp16=True)
+
+    # Build context blocks with metadata
+    scored_chunks = []
+    for i, chunk in enumerate(relevant_chunks):
+        meta = chunk.get("metadata", {})
+        meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items() if value)
+        formatted_block = (
+            f"### Document:\n"
+            f"**Metadata:**\n{meta_lines}\n"
+            f"**Content:**\n{chunk['text']}"
+        )
+        scored_chunks.append((i, model.compute_score([[query, formatted_block]])))
+        
+    # Sort and select top-k
+    top_k_indices = [i for i, _ in sorted(scored_chunks, key=lambda x: x[1], reverse=True)[:k]]
+
+    return [relevant_chunks[i] for i in top_k_indices]
