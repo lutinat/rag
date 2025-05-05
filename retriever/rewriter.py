@@ -35,7 +35,7 @@ def hyDE(question: str, model_name: str) -> str:
             "**Never** begin the sentence with phrases like 'The answer is', 'It is possible that', or any generic statement.\n"
             "**Do not explain** or provide context — only write the kind of sentence that could appear verbatim in a report.\n"
             "If the information is not publicly available, **make up a plausible answer** that sounds credible and grounded.\n"
-            "**Never fabricate exaggerated names or achievements** — keep it neutral and fact-like."
+            "**Never fabricate exaggerated names or achievements** — keep it neutral and fact-like.\n"
             "Use important words and vocabulary from the question in your answer to stay on topic.\n "
         )
     }
