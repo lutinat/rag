@@ -54,7 +54,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str]) -> list[dict]:
     user_prompt = {
         "role": "user",
         "content": (
-            "You are provided with context snippets from internal documents.\n"
+            "You are provided with independent context snippets from internal documents.\n"
             "Each one includes metadata and content. Use **only** the given information to answer.\n"
             "If unsure, explain what’s missing.\n\n"
             f"{'---'.join(context_blocks)}\n\n"

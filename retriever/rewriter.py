@@ -19,23 +19,40 @@ def hyDE(question: str, model_name: str) -> str:
         raise ValueError("Invalid question provided.")
 
     generation_args = {
-        "max_new_tokens": 100,  # Limite réduite pour forcer une réponse concise
+        "max_new_tokens": 60,  # Limite réduite pour forcer une réponse concise
         "return_full_text": False,
-        "temperature": 0.1,
-        "do_sample": True,
-        "top_p": 0.9,  # Contrôle supplémentaire sur l'échantillonnage
+        "temperature": 0,
+        # "do_sample": True,
+        # "top_p": 0.9,  # Contrôle supplémentaire sur l'échantillonnage
     }
 
-    prompt = (
-        "You are a helpful technical assistant for a company with expertise in satellite, space sector, their teams and internal tools.\n "
-        "Generate a single, concise and plausible full-sentence that could answer the following question.\n "
-        "Reintroduce the question and important words and vocabulary from the question in your answer to stay on topic.\n "
-        "The sentence should sound natural and informative, useful for retrieving relevant documents.\n "
-        "Avoid over-speculation or unrelated details.\n\n"
-        f"Question: {question}\n\nAnswer:"
-    )
+    # Define the system prompt
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "You are an assistant generating internal documentation for Satlantis, a company in the space sector.\n"
+            "Your task is to generate a **single, realistic, and plausible sentence** as if it were extracted from a confidential internal report.\n"
+            "**Never** begin the sentence with phrases like 'The answer is', 'It is possible that', or any generic statement.\n"
+            "**Do not explain** or provide context — only write the kind of sentence that could appear verbatim in a report.\n"
+            "If the information is not publicly available, **make up a plausible answer** that sounds credible and grounded.\n"
+            "**Never fabricate exaggerated names or achievements** — keep it neutral and fact-like."
+            "Use important words and vocabulary from the question in your answer to stay on topic.\n "
+        )
+    }
 
+    # Construct the user prompt
+    user_prompt = {
+        "role": "user",
+        "content": (
+            f"Question: {question}\n"
+            "Answer:"
+        )
+    }
+    
+    # Combine system and user prompts
+    prompt = [system_prompt, user_prompt]
 
+    # Generate the answer
     try:
         output = pipeline(prompt, **generation_args)
         answer = output[0]['generated_text'].strip()

@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     # Retrieve the top-20 chunks
     print("Retrieving context...")
-    top_chunks = retrieve_context(hyde_answer, embedder, chunks, index, k=20)
+    top_chunks = retrieve_context(hyde_answer, embedder, chunks, index, k=30)
 
     # Rerank to get the top-3 chunks
     print("Reranking...")
