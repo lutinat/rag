@@ -3,7 +3,7 @@ import os
 from utils import save_chunks_jsonl, load_chunks_jsonl, load_model
 from retriever.retriever import build_faiss_index, retrieve_context
 from huggingface_hub import login
-from data_processing.chunker import get_all_chunks
+from data_processing.data_extraction.chunker import get_all_chunks
 from dotenv import load_dotenv
 from inference.infer import build_prompt_from_chunks, generate_answer
 from retriever.retriever import reranker

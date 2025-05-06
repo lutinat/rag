@@ -85,6 +85,7 @@ def generate_answer(prompt: str, model_name: str) -> str:
         "temperature": 0.1,
         "do_sample": True, 
     }
+    
     # Generate the answer
     # Use try-except to handle potential errors during generation
     try:

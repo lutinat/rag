@@ -94,8 +94,8 @@ def is_noise(text: str) -> bool:
 
 def clean_text(text: str) -> str:
     """Denoise and clean the text."""
-    # # Remove extra spaces
-    # text = re.sub(r'\s+', ' ', text)
+    # Remove extra spaces
+    text = re.sub(r'\s+', ' ', text)
     
     # Remove special characters at the beginning and end
     text = re.sub(r'^[^\w\s\.\?!]+|[^\w\s\.\?!]+$', '', text)
