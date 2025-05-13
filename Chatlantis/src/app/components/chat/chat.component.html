@@ -1,9 +1,20 @@
-<div class="flex flex-row h-screen overflow-y-none">
-    <app-sidebar class="hidden md:block"></app-sidebar>
+<div class="flex flex-row h-screen overflow-y-none relative">
+    <button 
+        class="absolute top-4 left-4 md:hidden z-50 p-2 bg-satlantis-blue text-white rounded-md w-10"
+        (click)="toggleSidebar()"
+    >
+        <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <app-sidebar 
+        class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 md:relative md:translate-x-0 z-40"
+        [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
+    ></app-sidebar>
+
     <div class="flex flex-col w-full h-full text-satlantis-blue justify-center items-center gap-4">
         <h1 class="text-4xl font-bold">Welcome to Chatlantis</h1>
         <p class="text-base">Get answers to any of your question about Satlantis</p>
-        <div class="relative w-6/10 mt-4 mb-4">
+        <div class="relative w-6/10 mt-4 mb-4 z-10">
             <input 
                 type="text" 
                 placeholder="Ask anything" 
