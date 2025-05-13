@@ -1,3 +1,23 @@
-<div class="h-screen overflow-y-none">
-    <app-sidebar></app-sidebar>
+<div class="flex flex-row h-screen overflow-y-none">
+    <app-sidebar class="hidden md:block"></app-sidebar>
+    <div class="flex flex-col w-full h-full text-satlantis-blue justify-center items-center gap-4">
+        <h1 class="text-4xl font-bold">Welcome to Chatlantis</h1>
+        <p class="text-base">Get answers to any of your question about Satlantis</p>
+        <div class="relative w-6/10 mt-4 mb-4">
+            <input 
+                type="text" 
+                placeholder="Ask anything" 
+                class="border-2 border-gray-200 rounded-md p-2 w-full pr-10" 
+                [(ngModel)]="inputValue"
+            />
+            <i 
+                class="fa-solid fa-xl fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
+                [class.text-gray-400]="!inputValue" 
+                [class.text-satlantis-orange]="inputValue" 
+                [class.cursor-not-allowed]="!inputValue"
+                [class.cursor-pointer]="inputValue"
+                (click)="onArrowClick()"
+            ></i>
+        </div>
+    </div>
 </div>
