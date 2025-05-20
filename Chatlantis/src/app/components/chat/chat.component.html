@@ -18,10 +18,13 @@
             <p class="text-base">Get answers to any of your question about Satlantis</p>
             <div class="relative w-6/10 mt-4 mb-4 z-10">
                 <input 
+                    #chatInput
                     type="text" 
                     placeholder="Ask anything" 
                     class="border-2 border-gray-200 rounded-md p-2 w-full pr-10" 
                     [(ngModel)]="inputValue"
+                    (keydown.enter)="onArrowClick()"
+                    [disabled]="isWaitingForBot"
                 />
                 <i 
                     class="fa-solid fa-xl fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
@@ -37,11 +40,18 @@
         <!-- Chat Interface -->
         <div *ngIf="hasStartedChat" class="flex flex-col h-full">
             <!-- Chat Messages Container -->
-            <div class="flex-1 overflow-y-auto p-4">
-                <div *ngFor="let message of messages" class="flex justify-end mb-4">
-                    <div class="bg-satlantis-orange/50 text-satlantis-blue rounded-lg p-3 max-w-[80%]">
-                        {{ message.content }}
-                    </div>
+            <div #messageContainer class="flex-1 overflow-y-auto p-4">
+                <div *ngFor="let message of messages" class="mb-4 flex" [ngClass]="{'justify-end': message.isUser, 'justify-start': !message.isUser}">
+                  <div
+                    class="px-4 py-2 max-w-[80%]"
+                    [ngClass]="{
+                      'bg-satlantis-orange/50 text-satlantis-blue rounded-full text-right self-end': message.isUser,
+                      'bg-white text-satlantis-blue rounded-2xl rounded-bl-2xl rounded-tr-2xl rounded-br-2xl shadow-sm self-start': !message.isUser
+                    }"
+                    style="word-break: break-word;"
+                  >
+                    {{ message.content }}
+                  </div>
                 </div>
             </div>
 
@@ -49,10 +59,13 @@
             <div class="bg-white p-4">
                 <div class="relative">
                     <input 
+                        #chatInput
                         type="text" 
                         placeholder="Ask anything" 
                         class="w-full p-3 pr-12 bg-gray-50 focus:outline-none" 
                         [(ngModel)]="inputValue"
+                        (keydown.enter)="onArrowClick()"
+                        [disabled]="isWaitingForBot"
                     />
                     <i 
                         class="fa-solid fa-xl fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
