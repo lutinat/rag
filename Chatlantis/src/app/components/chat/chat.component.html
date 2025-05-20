@@ -7,12 +7,15 @@
     </button>
 
     <app-sidebar 
+        [chats]="sidebarChats"
+        [selectedChatId]="selectedChatId"
+        (newChat)="onNewChat()"
+        (selectChat)="onSelectChat($event)"
         class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 md:relative md:translate-x-0 z-40"
         [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
     ></app-sidebar>
 
     <div class="flex flex-col w-full h-full text-satlantis-blue">
-        <!-- Welcome Screen -->
         <div *ngIf="!hasStartedChat" class="flex flex-col justify-center items-center gap-4 h-full">
             <h1 class="text-4xl font-bold">Welcome to Chatlantis</h1>
             <p class="text-base">Get answers to any of your question about Satlantis</p>
@@ -37,15 +40,13 @@
             </div>
         </div>
 
-        <!-- Chat Interface -->
         <div *ngIf="hasStartedChat" class="flex flex-col h-full">
-            <!-- Chat Messages Container -->
             <div #messageContainer class="flex-1 overflow-y-auto p-4">
                 <div *ngFor="let message of messages" class="mb-4 flex" [ngClass]="{'justify-end': message.isUser, 'justify-start': !message.isUser}">
                   <div
                     class="px-4 py-2 max-w-[80%]"
                     [ngClass]="{
-                      'bg-satlantis-orange/50 text-satlantis-blue rounded-full text-right self-end': message.isUser,
+                      'bg-satlantis-orange/50 text-satlantis-blue rounded-3xl rounded-bl-3xl rounded-tr-3xl rounded-br-3xl text-right self-end': message.isUser,
                       'bg-white text-satlantis-blue rounded-2xl rounded-bl-2xl rounded-tr-2xl rounded-br-2xl shadow-sm self-start': !message.isUser
                     }"
                     style="word-break: break-word;"
@@ -55,7 +56,6 @@
                 </div>
             </div>
 
-            <!-- Input Area -->
             <div class="bg-white p-4">
                 <div class="relative">
                     <input 

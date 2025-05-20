@@ -7,53 +7,24 @@
         </div>
     </div>
 
-    <div class="overflow-y-scroll">
+    <div class="overflow-y-scroll flex-1">
         <div class="p-2">
             <div class="mb-2">
-                <button class="w-full flex items-center p-2 rounded-lg bg-gray-100 hover:bg-gray-200 cursor-pointer">
+                <button (click)="onNewChat()" class="w-full flex items-center p-2 rounded-lg bg-gray-100 hover:bg-gray-200 cursor-pointer">
                     🤖 New chat
                 </button>
             </div>
         </div>
 
         <div class="p-2">
-            <div class="text-sm font-medium mb-1">Today</div>
-            <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">
-                Who is ...
-            </a>
-        </div>
-
-        <div class="p-2">
-            <div class="text-sm font-medium mb-1">Previous 7 Days</div>
+            <div class="text-sm font-medium mb-1">Chats</div>
             <div class="space-y-1">
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-            </div>
-        </div>
-
-        <div class="p-2">
-            <div class="text-sm font-medium mb-1">Previous 30 Days</div>
-            <div class="space-y-1">
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-            </div>
-        </div>
-
-        <div class="p-2">
-            <div class="text-sm font-medium mb-1">April</div>
-            <div class="space-y-1">
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
-                <a href="#" class="block p-2 rounded-lg hover:bg-gray-100">Who is ...</a>
+                <button *ngFor="let chat of chats"
+                        (click)="onSelectChat(chat.id)"
+                        [ngClass]="{'bg-satlantis-blue text-white': chat.id === selectedChatId, 'bg-gray-100': chat.id !== selectedChatId}"
+                        class="block w-full text-left p-2 rounded-lg hover:bg-satlantis-blue/80 hover:text-white transition-colors group cursor-pointer">
+                    <span class="truncate block">{{ chat.title }}</span>
+                </button>
             </div>
         </div>
     </div>

@@ -1,11 +1,17 @@
 import { Component, ViewChild, ElementRef } from '@angular/core';
-import { SidebarComponent } from '../sidebar/sidebar.component';
+import { SidebarComponent, ChatSidebarItem } from '../sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 
 interface Message {
   content: string;
   isUser: boolean;
+}
+
+interface Chat {
+  id: number;
+  title: string;
+  messages: Message[];
 }
 
 @Component({
@@ -22,14 +28,43 @@ export class ChatComponent {
   inputValue: string = '';
   isSidebarOpen: boolean = false;
   hasStartedChat: boolean = false;
-  messages: Message[] = [];
   isWaitingForBot: boolean = false;
+
+  chats: Chat[] = [
+    { id: 1, title: 'New chat', messages: [] }
+  ];
+  selectedChatId: number = 1;
+  chatIdCounter: number = 2;
+
+  get selectedChat(): Chat | undefined {
+    return this.chats.find(chat => chat.id === this.selectedChatId);
+  }
+
+  get messages(): Message[] {
+    return this.selectedChat?.messages ?? [];
+  }
+
+  onNewChat() {
+    const newChat: Chat = {
+      id: this.chatIdCounter++,
+      title: 'New chat',
+      messages: []
+    };
+    this.chats.unshift(newChat);
+    this.selectedChatId = newChat.id;
+    this.inputValue = '';
+    this.hasStartedChat = false;
+  }
+
+  onSelectChat(id: number) {
+    this.selectedChatId = id;
+    this.inputValue = '';
+    this.hasStartedChat = this.messages.length > 0;
+  }
 
   private shouldScrollToBottom(): boolean {
     const container = this.messageContainer?.nativeElement;
     if (!container) return false;
-    
-    // On considère que l'utilisateur est en bas si il est à moins de 100px du bas
     const threshold = 100;
     return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
   }
@@ -46,19 +81,22 @@ export class ChatComponent {
   }
 
   onArrowClick(): void {
-    if (this.inputValue && !this.isWaitingForBot) {
+    if (this.inputValue && !this.isWaitingForBot && this.selectedChat) {
       this.hasStartedChat = true;
-      this.messages.push({
+      this.selectedChat.messages.push({
         content: this.inputValue,
         isUser: true
       });
+      if (this.selectedChat.messages.length === 1) {
+        this.selectedChat.title = this.inputValue.slice(0, 30) + (this.inputValue.length > 30 ? '...' : '');
+      }
       this.scrollToBottom();
       this.isWaitingForBot = true;
       this.inputValue = '';
 
       setTimeout(() => {
-        this.messages.push({
-          content: "Je suis Chatlantis, votre assistant virtuel. Je suis là pour répondre à vos questions sur Satlantis.",
+        this.selectedChat?.messages.push({
+          content: "I am a test response.",
           isUser: false
         });
         this.scrollToBottom();
@@ -70,5 +108,9 @@ export class ChatComponent {
 
   toggleSidebar(): void {
     this.isSidebarOpen = !this.isSidebarOpen;
+  }
+
+  get sidebarChats(): ChatSidebarItem[] {
+    return this.chats.map(chat => ({ id: chat.id, title: chat.title }));
   }
 }
