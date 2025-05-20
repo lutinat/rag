@@ -1,0 +1,31 @@
+<div class="w-64 bg-white shadow-lg h-full flex flex-col text-satlantis-blue">
+    <div class="p-4 flex items-center justify-center border-b border-gray-200">
+        <div class="flex items-center">
+            <div class="text-2xl font-bold">
+                <img src="assets/images/logo.svg" alt="Logo Chatlantis" class="h-28 w-56 mr-2">
+            </div>
+        </div>
+    </div>
+
+    <div class="overflow-y-scroll flex-1">
+        <div class="p-2">
+            <div class="mb-2">
+                <button (click)="onNewChat()" class="w-full flex items-center p-2 rounded-lg bg-gray-100 hover:bg-gray-200 cursor-pointer">
+                    🤖 New chat
+                </button>
+            </div>
+        </div>
+
+        <div class="p-2">
+            <div class="text-sm font-medium mb-1">Chats</div>
+            <div class="space-y-1">
+                <button *ngFor="let chat of chats"
+                        (click)="onSelectChat(chat.id)"
+                        [ngClass]="{'bg-satlantis-blue text-white': chat.id === selectedChatId, 'bg-gray-100': chat.id !== selectedChatId}"
+                        class="block w-full text-left p-2 rounded-lg hover:bg-satlantis-blue/80 hover:text-white transition-colors group cursor-pointer">
+                    <span class="truncate block">{{ chat.title }}</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
