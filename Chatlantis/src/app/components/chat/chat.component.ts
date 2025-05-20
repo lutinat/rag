@@ -2,10 +2,17 @@ import { Component, ViewChild, ElementRef } from '@angular/core';
 import { SidebarComponent, ChatSidebarItem } from '../sidebar/sidebar.component';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { ApiService } from '../../services/api.service';
+
+interface Source {
+  name: string;
+  url: string;
+}
 
 interface Message {
   content: string;
   isUser: boolean;
+  sources?: Source[];
 }
 
 interface Chat {
@@ -18,6 +25,7 @@ interface Chat {
   selector: 'app-chat',
   standalone: true,
   imports: [SidebarComponent, FormsModule, CommonModule],
+  providers: [ApiService],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
 })
@@ -25,6 +33,8 @@ export class ChatComponent {
   @ViewChild('chatInput') chatInput!: ElementRef<HTMLInputElement>;
   @ViewChild('messageContainer') messageContainer!: ElementRef<HTMLDivElement>;
   
+  constructor(private apiService: ApiService) {}
+
   inputValue: string = '';
   isSidebarOpen: boolean = false;
   hasStartedChat: boolean = false;
@@ -82,27 +92,29 @@ export class ChatComponent {
 
   onArrowClick(): void {
     if (this.inputValue && !this.isWaitingForBot && this.selectedChat) {
+      const userQuestion = this.inputValue;
       this.hasStartedChat = true;
       this.selectedChat.messages.push({
-        content: this.inputValue,
+        content: userQuestion,
         isUser: true
       });
       if (this.selectedChat.messages.length === 1) {
-        this.selectedChat.title = this.inputValue.slice(0, 30) + (this.inputValue.length > 30 ? '...' : '');
+        this.selectedChat.title = userQuestion.slice(0, 30) + (userQuestion.length > 30 ? '...' : '');
       }
       this.scrollToBottom();
       this.isWaitingForBot = true;
       this.inputValue = '';
 
-      setTimeout(() => {
+      this.apiService.getAnswer(userQuestion).subscribe(response => {
         this.selectedChat?.messages.push({
-          content: "I am a test response.",
-          isUser: false
+          content: response.answer,
+          isUser: false,
+          sources: response.sources
         });
         this.scrollToBottom();
         this.isWaitingForBot = false;
         setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
-      }, 1000);
+      });
     }
   }
 
