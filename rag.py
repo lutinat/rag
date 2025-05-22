@@ -15,32 +15,32 @@ hf_token = os.getenv("HF_TOKEN")
 login(hf_token)
 
 # Paths
-chunk_path = "/home/lucasd/code/rag/processed_data/all_chunks.jsonl"
-embeddings_folder = "/home/lucasd/code/rag/embeddings"
+chunk_path = "/home/elduayen/rag/processed_data/all_chunks.jsonl"
+embeddings_folder = "/home/elduayen/rag/embeddings"
 
 # Models
 phi4_model = "microsoft/Phi-4-mini-instruct"
 embedder_model = "intfloat/multilingual-e5-large-instruct"
 reranker_model = 'BAAI/bge-reranker-v2-m3'
 
-
-if __name__ == "__main__":
-
-    # Parse the arguments
-    if len(sys.argv) < 2:
-        print("Usage: python rag.py <question> [-s] (optional)")
-        sys.exit(1)
-    question = sys.argv[1]
-    # Check if the flag for saving embeddings (-s) is provided
-    recompute_embeddings = '-s' in sys.argv[2:]
-
+def rag(question: str, recompute_embeddings: bool = False) -> str:
+    """
+    Process a question through the RAG pipeline and return an answer.
+    
+    Args:
+        question (str): The question to answer
+        recompute_embeddings (bool): Whether to recompute embeddings
+        
+    Returns:
+        str: The generated answer
+    """
     # Generate the hypothetical answer (HyDE)
     hyde_answer = hyDE(question, model_name=phi4_model)
     print("HyDE : ", hyde_answer)
 
     # Extract and save chunks from the documents
     if recompute_embeddings:
-        chunks = get_all_chunks("/home/lucasd/code/rag/data", "/home/lucasd/code/rag/processed_data")
+        chunks = get_all_chunks("/home/elduayen/rag/data", "/home/elduayen/rag/processed_data")
     else:
         chunks = load_chunks_jsonl(chunk_path)
 
@@ -76,8 +76,22 @@ if __name__ == "__main__":
     print("Answer : ", answer)
 
     # Show the sources (last top-k chunks)
-    # Create a set of filenames from the metadata
     print("\nSources:")
+    sources = []
     for chunk in reranked_chunks:
+        sources.append(chunk['metadata']['filename'])
         print(f"- {chunk['metadata']['filename']}")
+        
+    return answer, sources
+
+if __name__ == "__main__":
+    # Parse the arguments
+    if len(sys.argv) < 2:
+        print("Usage: python rag.py <question> [-s] (optional)")
+        sys.exit(1)
+    question = sys.argv[1]
+    # Check if the flag for saving embeddings (-s) is provided
+    recompute_embeddings = '-s' in sys.argv[2:]
+    
+    answer = rag(question, recompute_embeddings)
 

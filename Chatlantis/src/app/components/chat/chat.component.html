@@ -55,7 +55,7 @@
                     <div *ngIf="!message.isUser && message.sources" class="mt-2 text-sm">
                       <div class="font-semibold">Sources:</div>
                       <div *ngFor="let source of message.sources">
-                        <a [href]="source.url" target="_blank" class="text-satlantis-blue hover:underline">{{ source.name }}</a>
+                        <a href="" target="_blank" class="text-satlantis-blue hover:underline cursor-pointer">{{ source.name }}</a>
                       </div>
                     </div>
                   </div>

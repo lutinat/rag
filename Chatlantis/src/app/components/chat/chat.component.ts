@@ -6,7 +6,6 @@ import { ApiService } from '../../services/api.service';
 
 interface Source {
   name: string;
-  url: string;
 }
 
 interface Message {
@@ -106,10 +105,13 @@ export class ChatComponent {
       this.inputValue = '';
 
       this.apiService.getAnswer(userQuestion).subscribe(response => {
+        const sources = response.sources ? response.sources.map((source: string) => ({ name: source })) : [];
+        console.log('Sources:', sources);
+        console.log('Response:', response.answer);
         this.selectedChat?.messages.push({
           content: response.answer,
           isUser: false,
-          sources: response.sources
+          sources: sources
         });
         this.scrollToBottom();
         this.isWaitingForBot = false;
