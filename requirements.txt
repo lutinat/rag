@@ -20,3 +20,7 @@ spacy_layout==0.0.12
 torch==2.6.0
 tqdm==4.67.1
 transformers==4.51.3
+
+#API
+flask==3.0.2
+flask_cors==4.0.0

@@ -51,7 +51,13 @@
                     }"
                     style="word-break: break-word;"
                   >
-                    {{ message.content }}
+                    <div [innerHTML]="message.content"></div>
+                    <div *ngIf="!message.isUser && message.sources" class="mt-2 text-sm">
+                      <div class="font-semibold">Sources:</div>
+                      <div *ngFor="let source of message.sources">
+                        <a href="" target="_blank" class="text-satlantis-blue hover:underline cursor-pointer">{{ source.name }}</a>
+                      </div>
+                    </div>
                   </div>
                 </div>
             </div>
