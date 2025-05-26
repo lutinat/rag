@@ -12,6 +12,7 @@
         (newChat)="onNewChat()"
         (selectChat)="onSelectChat($event)"
         (deleteChat)="deleteChat($event)"
+        (editChat)="startEditing($event.event, $event.chat)"
         class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 md:relative md:translate-x-0 z-40"
         [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
     ></app-sidebar>
@@ -87,3 +88,11 @@
         </div>
     </div>
 </div>
+
+<app-edit-chat-modal
+    *ngIf="showEditModal && editingChat"
+    [chatId]="editingChat.id"
+    [initialTitle]="editingChat.title"
+    (save)="onSaveEdit($event)"
+    (cancel)="onCancelEdit()">
+</app-edit-chat-modal>
