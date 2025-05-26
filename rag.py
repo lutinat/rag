@@ -93,5 +93,5 @@ if __name__ == "__main__":
     # Check if the flag for saving embeddings (-s) is provided
     recompute_embeddings = '-s' in sys.argv[2:]
     
-    answer = rag(question, recompute_embeddings)
+    answer, sources = rag(question, recompute_embeddings)
 
