@@ -127,4 +127,15 @@ export class ChatComponent {
   get sidebarChats(): ChatSidebarItem[] {
     return this.chats.map(chat => ({ id: chat.id, title: chat.title }));
   }
+
+  deleteChat(id: number): void {
+    const index = this.chats.findIndex(chat => chat.id === id);
+    if (index !== -1) {
+      this.chats.splice(index, 1);
+      if (this.selectedChatId === id) {
+        this.selectedChatId = this.chats[0]?.id ?? 1;
+        this.hasStartedChat = this.messages.length > 0;
+      }
+    }
+  }
 }

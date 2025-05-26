@@ -11,6 +11,7 @@
         [selectedChatId]="selectedChatId"
         (newChat)="onNewChat()"
         (selectChat)="onSelectChat($event)"
+        (deleteChat)="deleteChat($event)"
         class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 md:relative md:translate-x-0 z-40"
         [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
     ></app-sidebar>

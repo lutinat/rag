@@ -19,6 +19,7 @@ export class SidebarComponent {
   @Input() selectedChatId: number | null = null;
   @Output() newChat = new EventEmitter<void>();
   @Output() selectChat = new EventEmitter<number>();
+  @Output() deleteChat = new EventEmitter<number>();
 
   onNewChat() {
     this.newChat.emit();
@@ -26,5 +27,10 @@ export class SidebarComponent {
 
   onSelectChat(id: number) {
     this.selectChat.emit(id);
+  }
+
+  onDeleteChat(event: Event, id: number) {
+    event.stopPropagation();
+    this.deleteChat.emit(id);
   }
 }
