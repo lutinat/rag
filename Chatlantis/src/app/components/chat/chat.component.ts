@@ -137,7 +137,17 @@ export class ChatComponent {
     if (index !== -1) {
       this.chats.splice(index, 1);
       if (this.selectedChatId === id) {
-        this.selectedChatId = this.chats[0]?.id ?? 1;
+        if (this.chats.length === 0) {
+          const newChat: Chat = {
+            id: this.chatIdCounter++,
+            title: 'New chat',
+            messages: []
+          };
+          this.chats.push(newChat);
+          this.selectedChatId = newChat.id;
+        } else {
+          this.selectedChatId = this.chats[0].id;
+        }
         this.hasStartedChat = this.messages.length > 0;
       }
     }

@@ -23,16 +23,15 @@
                      [ngClass]="{'bg-satlantis-blue text-white': chat.id === selectedChatId, 'bg-gray-100': chat.id !== selectedChatId}"
                      class="block w-full text-left p-2 rounded-lg hover:bg-satlantis-blue/80 hover:text-white transition-colors group">
                     <div class="flex justify-between items-center">
-                        <div class="flex-1 cursor-pointer" (click)="onSelectChat(chat.id)">
-                            <span class="truncate block">{{ chat.title }}</span>
+                        <div class="flex-1 cursor-pointer min-w-0" (click)="onSelectChat(chat.id)">
+                            <span class="truncate block max-w-[180px]">{{ chat.title }}</span>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 shrink-0">
                             <button (click)="startEditing($event, chat)" 
                                     class="opacity-0 group-hover:opacity-100 hover:text-blue-500 transition-opacity cursor-pointer">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
-                            <button *ngIf="chats.length > 1"
-                                    (click)="onDeleteChat($event, chat.id)" 
+                            <button (click)="onDeleteChat($event, chat.id)" 
                                     class="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity cursor-pointer">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
