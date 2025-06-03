@@ -9,7 +9,10 @@ CORS(app)
 def question():
     data = request.json
     question = data.get('question')
-    answer, sources = rag.rag(question)
+    answer, sources = rag.rag(question, 
+                              recompute_embeddings=False, 
+                              enable_profiling=False, 
+                              quantization="4bit")
     print('Answer : ', answer)
     print('Sources : ', sources)
     return jsonify({
