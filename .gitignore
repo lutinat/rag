@@ -4,6 +4,7 @@
 *.json
 *.jsonl
 *.npy
+*.png
 .env
 
 # Ignore all files in the inference/models directory
