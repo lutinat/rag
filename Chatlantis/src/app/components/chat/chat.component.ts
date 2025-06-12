@@ -3,6 +3,7 @@ import { SidebarComponent, ChatSidebarItem } from '../sidebar/sidebar.component'
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
+import { EditChatModalComponent } from '../edit-chat-modal/edit-chat-modal.component';
 
 interface Source {
   name: string;
@@ -23,7 +24,7 @@ interface Chat {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [SidebarComponent, FormsModule, CommonModule],
+  imports: [SidebarComponent, FormsModule, CommonModule, EditChatModalComponent],
   providers: [ApiService],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -44,6 +45,9 @@ export class ChatComponent {
   ];
   selectedChatId: number = 1;
   chatIdCounter: number = 2;
+
+  showEditModal = false;
+  editingChat: ChatSidebarItem | null = null;
 
   get selectedChat(): Chat | undefined {
     return this.chats.find(chat => chat.id === this.selectedChatId);
@@ -126,5 +130,51 @@ export class ChatComponent {
 
   get sidebarChats(): ChatSidebarItem[] {
     return this.chats.map(chat => ({ id: chat.id, title: chat.title }));
+  }
+
+  deleteChat(id: number): void {
+    const index = this.chats.findIndex(chat => chat.id === id);
+    if (index !== -1) {
+      this.chats.splice(index, 1);
+      if (this.selectedChatId === id) {
+        if (this.chats.length === 0) {
+          const newChat: Chat = {
+            id: this.chatIdCounter++,
+            title: 'New chat',
+            messages: []
+          };
+          this.chats.push(newChat);
+          this.selectedChatId = newChat.id;
+        } else {
+          this.selectedChatId = this.chats[0].id;
+        }
+        this.hasStartedChat = this.messages.length > 0;
+      }
+    }
+  }
+
+  renameChat(data: {id: number, newTitle: string}): void {
+    const chat = this.chats.find(chat => chat.id === data.id);
+    if (chat) {
+      chat.title = data.newTitle;
+    }
+  }
+
+  startEditing(event: Event, chat: ChatSidebarItem) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.editingChat = chat;
+    this.showEditModal = true;
+  }
+
+  onSaveEdit(data: {id: number, newTitle: string}) {
+    this.renameChat(data);
+    this.showEditModal = false;
+    this.editingChat = null;
+  }
+
+  onCancelEdit() {
+    this.showEditModal = false;
+    this.editingChat = null;
   }
 }

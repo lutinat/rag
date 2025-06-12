@@ -11,6 +11,8 @@
         [selectedChatId]="selectedChatId"
         (newChat)="onNewChat()"
         (selectChat)="onSelectChat($event)"
+        (deleteChat)="deleteChat($event)"
+        (editChat)="startEditing($event.event, $event.chat)"
         class="fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 md:relative md:translate-x-0 z-40"
         [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
     ></app-sidebar>
@@ -60,6 +62,16 @@
                     </div>
                   </div>
                 </div>
+
+                <div *ngIf="isWaitingForBot" class="mb-4 flex justify-start">
+                  <div class="px-4 py-2 bg-white text-satlantis-blue rounded-2xl rounded-bl-2xl rounded-tr-2xl rounded-br-2xl shadow-sm self-start">
+                    <div class="flex items-center gap-2">
+                      <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce"></div>
+                      <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                      <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                    </div>
+                  </div>
+                </div>
             </div>
 
             <div class="bg-white p-4">
@@ -86,3 +98,11 @@
         </div>
     </div>
 </div>
+
+<app-edit-chat-modal
+    *ngIf="showEditModal && editingChat"
+    [chatId]="editingChat.id"
+    [initialTitle]="editingChat.title"
+    (save)="onSaveEdit($event)"
+    (cancel)="onCancelEdit()">
+</app-edit-chat-modal>
