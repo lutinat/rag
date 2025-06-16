@@ -93,12 +93,16 @@ export class ChatComponent {
     }
   }
 
+  private convertNewlinesToHtml(text: string): string {
+    return text.replace(/\n/g, '<br>');
+  }
+
   onArrowClick(): void {
     if (this.inputValue && !this.isWaitingForBot && this.selectedChat) {
       const userQuestion = this.inputValue;
       this.hasStartedChat = true;
       this.selectedChat.messages.push({
-        content: userQuestion,
+        content: this.convertNewlinesToHtml(userQuestion),
         isUser: true
       });
       if (this.selectedChat.messages.length === 1) {
@@ -113,7 +117,7 @@ export class ChatComponent {
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
         this.selectedChat?.messages.push({
-          content: response.answer,
+          content: this.convertNewlinesToHtml(response.answer),
           isUser: false,
           sources: sources
         });
