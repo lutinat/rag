@@ -4,13 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
 import { EditChatModalComponent } from '../edit-chat-modal/edit-chat-modal.component';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 interface Source {
   name: string;
 }
 
 interface Message {
-  content: string;
+  content: SafeHtml;
   isUser: boolean;
   sources?: Source[];
 }
@@ -33,7 +34,10 @@ export class ChatComponent {
   @ViewChild('chatInput') chatInput!: ElementRef<HTMLInputElement>;
   @ViewChild('messageContainer') messageContainer!: ElementRef<HTMLDivElement>;
   
-  constructor(private apiService: ApiService) {}
+  constructor(
+    private apiService: ApiService,
+    private sanitizer: DomSanitizer
+  ) {}
 
   inputValue: string = '';
   isSidebarOpen: boolean = false;
@@ -93,8 +97,8 @@ export class ChatComponent {
     }
   }
 
-  private convertNewlinesToHtml(text: string): string {
-    return text.replace(/\n/g, '<br>');
+  private sanitizeHtml(text: string): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(text);
   }
 
   onArrowClick(): void {
@@ -102,7 +106,7 @@ export class ChatComponent {
       const userQuestion = this.inputValue;
       this.hasStartedChat = true;
       this.selectedChat.messages.push({
-        content: this.convertNewlinesToHtml(userQuestion),
+        content: this.sanitizeHtml(userQuestion),
         isUser: true
       });
       if (this.selectedChat.messages.length === 1) {
@@ -117,7 +121,7 @@ export class ChatComponent {
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
         this.selectedChat?.messages.push({
-          content: this.convertNewlinesToHtml(response.answer),
+          content: this.sanitizeHtml(response.answer),
           isUser: false,
           sources: sources
         });

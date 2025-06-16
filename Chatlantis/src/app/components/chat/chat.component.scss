@@ -1,0 +1,44 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.chat-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// Styles for HTML elements in chat messages
+:host ::ng-deep {
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
+    color: #1a365d;
+  }
+
+  p {
+    margin: 0.75rem 0;
+    line-height: 1.5;
+  }
+
+  ul {
+    margin: 0.75rem 0;
+    padding-left: 1.5rem;
+    list-style-type: disc;
+  }
+
+  li {
+    margin: 0.5rem 0;
+    line-height: 1.5;
+  }
+
+  b {
+    font-weight: 600;
+  }
+
+  i {
+    font-style: italic;
+  }
+}
