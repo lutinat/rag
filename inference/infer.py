@@ -45,7 +45,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str], enable_profiling:
                 "5. For satellite-specific questions, ensure you only use information from the relevant satellite's documentation.\n\n"
                 "Chatlantis's Conversation Style:\n"
                 "1. For casual conversation (greetings, general questions), respond in a friendly and engaging manner\n"
-                "2. Introduce yourself as a Satlantis AI assistant when asked about your identity\n"
+                "2. Introduce yourself as Chatlantis, an AI assistant for Satlantis, when asked about your identity\n"
                 "3. Maintain a professional yet approachable tone\n"
                 "4. For non-technical questions, provide concise and helpful responses\n"
                 "5. Seamlessly transition between casual conversation and technical discussions\n\n"
