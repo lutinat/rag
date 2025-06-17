@@ -10,6 +10,7 @@ import subprocess
 import sys
 import os
 import torch
+from config import ProductionConfig
 
 def check_gpu_memory():
     """Check available GPU memory."""
@@ -58,8 +59,8 @@ def check_dependencies():
 def validate_paths():
     """Validate that required files exist."""
     paths_to_check = [
-        ("/home/elduayen/rag/processed_data/all_chunks.jsonl", "Chunks file"),
-        ("/home/elduayen/rag/embeddings", "Embeddings folder"),
+        (ProductionConfig.CHUNK_PATH, "Chunks file"),
+        (ProductionConfig.EMBEDDINGS_FOLDER, "Embeddings folder"),
     ]
     
     missing = []
@@ -79,9 +80,9 @@ def validate_paths():
 def run_production_server():
     """Run the production server."""
     print("🚀 Starting production RAG server...")
-    print("Server: http://localhost:5000")
-    print("Health: http://localhost:5000/api/health")
-    print("Status: http://localhost:5000/api/models/status")
+    print(f"Server: http://localhost:{ProductionConfig.API_PORT}")
+    print(f"Health: http://localhost:{ProductionConfig.API_PORT}/api/health")
+    print(f"Status: http://localhost:{ProductionConfig.API_PORT}/api/models/status")
     print("\nPress Ctrl+C to stop")
     
     try:

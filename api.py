@@ -19,6 +19,7 @@ from utils import load_chunks_jsonl
 from huggingface_hub import login
 from dotenv import load_dotenv
 from rag import rag
+from config import ProductionConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,7 +51,10 @@ class ModelInfo:
 class ModelManager:
     """Manages model loading, unloading, and memory optimization."""
     
-    def __init__(self, max_memory_gb: float = 16.0):
+    def __init__(self, max_memory_gb: float = None):
+        if max_memory_gb is None:
+            max_memory_gb = ProductionConfig.MAX_GPU_MEMORY_GB
+            
         self.models: Dict[str, ModelInfo] = {}
         self.model_lock = Lock()
         self.max_memory_gb = max_memory_gb
@@ -61,15 +65,15 @@ class ModelManager:
         self.model_configs = {
             "llm": ModelInfo(
                 model_type=ModelType.LLM,
-                model_name="microsoft/Phi-4-mini-instruct"
+                model_name=ProductionConfig.MODELS["llm"]
             ),
             "embedder": ModelInfo(
                 model_type=ModelType.EMBEDDER,
-                model_name="intfloat/multilingual-e5-large-instruct"
+                model_name=ProductionConfig.MODELS["embedder"]
             ),
             "reranker": ModelInfo(
                 model_type=ModelType.RERANKER,
-                model_name="BAAI/bge-reranker-v2-m3"
+                model_name=ProductionConfig.MODELS["reranker"]
             )
         }
         
@@ -143,9 +147,9 @@ class ModelManager:
             
             # Memory estimates
             memory_estimates = {
-                "llm": 6.0 if quantization == "4bit" else 8.0,
-                "embedder": 2.0,
-                "reranker": 1.5
+                "llm": ProductionConfig.MODEL_MEMORY_ESTIMATES["llm_4bit"] if quantization == "4bit" else ProductionConfig.MODEL_MEMORY_ESTIMATES["llm_8bit"],
+                "embedder": ProductionConfig.MODEL_MEMORY_ESTIMATES["embedder"],
+                "reranker": ProductionConfig.MODEL_MEMORY_ESTIMATES["reranker"]
             }
             
             required_memory = memory_estimates.get(model_key, 4.0)
@@ -242,8 +246,8 @@ class RAGProcessor:
     
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
-        self.chunk_path = "/home/elduayen/rag/processed_data/all_chunks.jsonl"
-        self.embeddings_folder = "/home/elduayen/rag/embeddings"
+        self.chunk_path = ProductionConfig.CHUNK_PATH
+        self.embeddings_folder = ProductionConfig.EMBEDDINGS_FOLDER
         self.index = None
         self.embedder_model = None
         self.chunks = None
@@ -395,7 +399,7 @@ def question():
         request_queue.put((question, quantization, response_queue))
         
         try:
-            result, status_code = response_queue.get(timeout=300)
+            result, status_code = response_queue.get(timeout=ProductionConfig.REQUEST_TIMEOUT)
             return jsonify(result), status_code
         except Exception as e:
             return jsonify({'error': f'Request processing failed: {str(e)}'}), 504
@@ -547,7 +551,7 @@ if __name__ == '__main__':
     
     if initialize_app():
         try:
-            app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=use_reloader)
+            app.run(host=ProductionConfig.API_HOST, port=ProductionConfig.API_PORT, debug=True, use_reloader=use_reloader)
         except KeyboardInterrupt:
             pass
         except Exception as e:
