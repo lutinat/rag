@@ -3,32 +3,26 @@ from flask_cors import CORS
 import logging
 import traceback
 from queue import Queue
-from threading import Thread, Lock, Event
+from threading import Thread, Lock
 import time
 import gc
 import torch
 from typing import Optional, Dict, Any, Tuple
-import json
 import os
 from dataclasses import dataclass
 from enum import Enum
-import numpy as np
-import faiss
 
 # Import your existing modules
 from utils import load_model, free_model_memory
-from retriever.retriever import build_faiss_index, retrieve_context
+from retriever.retriever import build_faiss_index
 from utils import load_chunks_jsonl
 from huggingface_hub import login
 from dotenv import load_dotenv
-# Import the modified rag function
 from rag import rag
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment
 load_dotenv()
 hf_token = os.getenv("HF_TOKEN")
 if hf_token:
@@ -61,8 +55,6 @@ class ModelManager:
         self.model_lock = Lock()
         self.max_memory_gb = max_memory_gb
         self.current_memory_gb = 0.0
-        
-        # Track which models are preloaded vs loaded on-demand
         self.preloaded_models = set()
         
         # Model configurations
@@ -100,15 +92,12 @@ class ModelManager:
     def unload_least_recently_used(self, required_memory_gb: float):
         """Unload least recently used models to free memory."""
         with self.model_lock:
-            # Sort models by last used time
             loaded_models = [(k, v) for k, v in self.models.items() if v.loaded]
             loaded_models.sort(key=lambda x: x[1].last_used)
             
             for model_key, model_info in loaded_models:
                 if self.can_load_model(required_memory_gb):
                     break
-                    
-                logger.info(f"Unloading {model_key} to free memory")
                 self._unload_model(model_key)
     
     def _unload_model(self, model_key: str):
@@ -117,7 +106,6 @@ class ModelManager:
         if not model_info.loaded:
             return
             
-        # Free the model from memory
         if model_info.pipeline:
             free_model_memory(model_info.pipeline)
             model_info.pipeline = None
@@ -135,13 +123,10 @@ class ModelManager:
         model_info.loaded = False
         self.current_memory_gb -= model_info.memory_usage_gb
         model_info.memory_usage_gb = 0.0
-        
         self.free_gpu_memory()
-        logger.info(f"Unloaded {model_key}")
     
     def load_model(self, model_key: str, quantization: str = None) -> ModelInfo:
         """Load a model with memory management."""
-        # Use config default if no quantization specified
         if quantization is None:
             from production_config import ProductionConfig
             quantization = ProductionConfig.DEFAULT_QUANTIZATION
@@ -156,7 +141,7 @@ class ModelManager:
                 model_info.last_used = time.time()
                 return model_info
             
-            # Estimate memory requirement (rough estimates)
+            # Memory estimates
             memory_estimates = {
                 "llm": 6.0 if quantization == "4bit" else 8.0,
                 "embedder": 2.0,
@@ -165,11 +150,9 @@ class ModelManager:
             
             required_memory = memory_estimates.get(model_key, 4.0)
             
-            # Free memory if needed
             if not self.can_load_model(required_memory):
                 self.unload_least_recently_used(required_memory)
             
-            # Load the model
             memory_before = self.get_gpu_memory_usage()
             
             try:
@@ -184,37 +167,21 @@ class ModelManager:
                     
                 elif model_info.model_type == ModelType.EMBEDDER:
                     from sentence_transformers import SentenceTransformer
-                    import torch
                     device = "cuda" if torch.cuda.is_available() else "cpu"
                     embedder = SentenceTransformer(model_info.model_name, device=device)
                     model_info.model_obj = embedder
                     
                 elif model_info.model_type == ModelType.RERANKER:
                     from FlagEmbedding import FlagReranker
-                    import torch
-                    import os
                     
                     if torch.cuda.is_available():
-                        # FlagReranker respects CUDA_VISIBLE_DEVICES and uses GPU by default
-                        # Force GPU usage by ensuring CUDA_VISIBLE_DEVICES is set
                         if 'CUDA_VISIBLE_DEVICES' not in os.environ:
                             os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-                        logger.info(f"Loading reranker on GPU (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
-                        # Initialize reranker with fp16 for GPU
                         reranker_model = FlagReranker(model_info.model_name, use_fp16=True)
                         
-                        # Force model to GPU explicitly
-                        try:
-                            if hasattr(reranker_model, 'model'):
-                                reranker_model.model = reranker_model.model.cuda()
-                                device = next(reranker_model.model.parameters()).device
-                                logger.info(f"Reranker model moved to device: {device}")
-                            else:
-                                logger.warning("Cannot access underlying model to move to GPU")
-                        except Exception as e:
-                            logger.warning(f"Failed to move reranker to GPU: {e}")
+                        if hasattr(reranker_model, 'model'):
+                            reranker_model.model = reranker_model.model.cuda()
                     else:
-                        logger.info("Loading reranker on CPU")
                         reranker_model = FlagReranker(model_info.model_name, use_fp16=False)
                     
                     model_info.model_obj = reranker_model
@@ -224,8 +191,6 @@ class ModelManager:
                 model_info.loaded = True
                 model_info.last_used = time.time()
                 self.current_memory_gb += model_info.memory_usage_gb
-                
-                logger.info(f"Loaded {model_key} ({model_info.memory_usage_gb:.2f}GB)")
                 
                 return model_info
                 
@@ -253,26 +218,21 @@ class ModelManager:
                 if model_key not in self.preloaded_models:
                     model_info = self.models[model_key]
                     if model_info.loaded:
-                        logger.info(f"Unloading on-demand model: {model_key}")
                         self._unload_model(model_key)
     
     def handle_memory_error_cleanup(self):
         """Handle CUDA memory errors by unloading on-demand models."""
         logger.warning("CUDA memory error detected, unloading on-demand models...")
         
-        # First try unloading on-demand models
         self.unload_on_demand_models()
         self.free_gpu_memory()
         
-        # If still not enough, unload least recently used
         if self.current_memory_gb > self.max_memory_gb * 0.8:
-            logger.warning("Still high memory usage, unloading least recently used models...")
             with self.model_lock:
                 loaded_models = [(k, v) for k, v in self.models.items() if v.loaded]
                 loaded_models.sort(key=lambda x: x[1].last_used)
                 
-                for model_key, model_info in loaded_models[:1]:  # Unload oldest
-                    logger.info(f"Emergency unloading: {model_key}")
+                for model_key, model_info in loaded_models[:1]:
                     self._unload_model(model_key)
                     if model_key in self.preloaded_models:
                         self.preloaded_models.remove(model_key)
@@ -282,12 +242,8 @@ class RAGProcessor:
     
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
-        
-        # Paths
         self.chunk_path = "/home/elduayen/rag/processed_data/all_chunks.jsonl"
         self.embeddings_folder = "/home/elduayen/rag/embeddings"
-        
-        # Pre-loaded data (will be populated if preloaded)
         self.index = None
         self.embedder_model = None
         self.chunks = None
@@ -295,20 +251,14 @@ class RAGProcessor:
     def preload_embeddings(self):
         """Preload embeddings and FAISS index."""
         try:
-            logger.info("🔧 Preloading embeddings and FAISS index...")
-            
-            # Load chunks
             self.chunks = load_chunks_jsonl(self.chunk_path)
-            logger.info(f"Loaded {len(self.chunks)} chunks")
             
-            # Get embedder model
             embedder_info = self.model_manager.get_model("embedder")
             if not embedder_info or not embedder_info.loaded:
                 raise Exception("Failed to load embedder model for preloading")
             
             self.embedder_model = embedder_info.model_obj
             
-            # Build FAISS index with preloaded embedder
             self.index, embeddings, self.chunks, _ = build_faiss_index(
                 self.chunks,
                 embedder_info.model_name,
@@ -318,11 +268,10 @@ class RAGProcessor:
                 pre_loaded_embedder=self.embedder_model
             )
             
-            logger.info("✅ Successfully preloaded embeddings and FAISS index")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to preload embeddings: {e}")
+            logger.error(f"Failed to preload embeddings: {e}")
             self.index = None
             self.embedder_model = None  
             self.chunks = None
@@ -330,33 +279,26 @@ class RAGProcessor:
             
     def process_question(self, question: str, quantization: str = None) -> Tuple[Dict[str, Any], int]:
         """Process a question using the rag.py function with preloaded models."""
-        # Use config default if no quantization specified
         if quantization is None:
             from production_config import ProductionConfig
             quantization = ProductionConfig.DEFAULT_QUANTIZATION
             
         try:
-            # Prepare preloaded models dictionary
             preloaded_models = {}
             preloaded_embeddings = {}
             
-            # Get LLM model
+            # Get models
             llm_info = self.model_manager.get_model("llm", quantization)
             if llm_info and llm_info.loaded:
                 preloaded_models['llm'] = llm_info.pipeline
-                logger.info("✅ Using preloaded LLM model")
             
-            # Get embedder model  
             embedder_info = self.model_manager.get_model("embedder")
             if embedder_info and embedder_info.loaded:
                 preloaded_models['embedder'] = embedder_info.model_obj
-                logger.info("✅ Using preloaded embedder model")
             
-            # Get reranker model
             reranker_info = self.model_manager.get_model("reranker")
             if reranker_info and reranker_info.loaded:
                 preloaded_models['reranker'] = reranker_info.model_obj
-                logger.info("✅ Using preloaded reranker model")
             
             # Use preloaded embeddings if available
             if self.index is not None and self.embedder_model is not None:
@@ -365,15 +307,8 @@ class RAGProcessor:
                     'embedder': self.embedder_model,
                     'chunks': self.chunks
                 }
-                logger.info("✅ Using preloaded embeddings and FAISS index")
             
-            # Log what's being used
-            if preloaded_models:
-                logger.info(f"🔧 Production mode: Using preloaded models: {list(preloaded_models.keys())}")
-            else:
-                logger.warning("⚠️  No preloaded models available - will load on demand")
-            
-            # Call the rag function with preloaded models
+            # Call the rag function
             answer, sources = rag(
                 question=question,
                 recompute_embeddings=False,
@@ -390,27 +325,22 @@ class RAGProcessor:
             
         except torch.cuda.OutOfMemoryError as e:
             logger.error(f"CUDA out of memory error: {e}")
-            # Force cleanup of on-demand models
             self.model_manager.handle_memory_error_cleanup()
             
             return {
                 "error": "GPU memory is full. On-demand models have been unloaded - please try again.",
-                "error_type": "memory_error",
-                "suggestion": "Wait a moment for memory cleanup to complete, then try your question again."
+                "error_type": "memory_error"
             }, 503
             
         except Exception as e:
             logger.error(f"Error processing question: {e}")
-            logger.error(traceback.format_exc())
             
-            # Check if it's a memory-related error
             error_str = str(e).lower()
             if "memory" in error_str or "cuda" in error_str:
                 self.model_manager.handle_memory_error_cleanup()
                 return {
                     "error": "Memory-related error occurred. Please try again.",
-                    "error_type": "memory_error",
-                    "suggestion": "On-demand models have been unloaded. Try your question again."
+                    "error_type": "memory_error"
                 }, 503
             
             return {
@@ -422,87 +352,57 @@ class RAGProcessor:
 model_manager = None
 rag_processor = None
 request_queue = Queue()
-MAX_WORKERS = 1
-active_workers = 0
 worker_lock = Lock()
 
 def worker():
     """Worker function to process requests from the queue."""
-    global active_workers
-    
     while True:
         response_queue = None
         try:
-            # Get a request from the queue
             request_data = request_queue.get()
-            if request_data is None:  # Poison pill to stop the worker
+            if request_data is None:
                 break
                 
             question, quantization, response_queue = request_data
-            logger.info(f"Processing request: {question}")
-            
-            # Process the request using RAGProcessor
             result, status_code = rag_processor.process_question(question, quantization)
-            
-            # Put the result in the response queue
             response_queue.put((result, status_code))
-            logger.info("Request processing completed")
             
         except Exception as e:
             logger.error(f"Error in worker: {str(e)}")
-            logger.error(traceback.format_exc())
-            # Ensure we always put something in the response queue
             if response_queue is not None:
                 try:
                     error_response = {'error': f'Internal server error: {str(e)}'}
                     response_queue.put((error_response, 500))
-                except Exception as queue_error:
-                    logger.error(f"Failed to put error response in queue: {queue_error}")
+                except Exception:
+                    pass
         finally:
             request_queue.task_done()
-            with worker_lock:
-                active_workers -= 1
 
 @app.route('/api/question', methods=['POST'])
 def question():
-    logger.debug("Received question request")
     try:
         data = request.json
         if not data:
-            logger.error("No JSON data in request")
             return jsonify({'error': 'No JSON data provided'}), 400
             
         question = data.get('question')
         if not question:
-            logger.error("No question in request data")
             return jsonify({'error': 'No question provided'}), 400
         
-        quantization = data.get('quantization', None)  # Optional quantization override
+        quantization = data.get('quantization', None)
             
-        logger.debug(f"Queueing question: {question}")
-        
-        # Create a response queue for this request
         response_queue = Queue()
-        
-        # Add request to the queue
         request_queue.put((question, quantization, response_queue))
         
-        # Wait for the response with better error handling
         try:
             result, status_code = response_queue.get(timeout=300)
-            logger.debug(f"Received response with status code: {status_code}")
             return jsonify(result), status_code
         except Exception as e:
-            error_msg = str(e) if str(e) else "Empty response from worker"
-            logger.error(f"Error waiting for response: {error_msg}")
-            return jsonify({'error': f'Request processing failed: {error_msg}'}), 504
+            return jsonify({'error': f'Request processing failed: {str(e)}'}), 504
             
     except Exception as e:
         logger.error(f"Unexpected error in question endpoint: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({
-            'error': f'Unexpected error: {str(e)}'
-        }), 500
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -569,56 +469,31 @@ def cleanup_models():
     """Cleanup preloaded models before shutdown/reload."""
     global model_manager, rag_processor
     
-    logger.info("🧹 Cleaning up preloaded models...")
-    
     try:
-        # Clear RAG processor embeddings
         if rag_processor:
-            logger.info("   Clearing embeddings and FAISS index...")
             rag_processor.index = None
             rag_processor.embedder_model = None
             rag_processor.chunks = None
         
-        # Unload all models from model manager
         if model_manager:
-            logger.info("   Unloading all models...")
             for model_key in list(model_manager.models.keys()):
                 if model_manager.models[model_key].loaded:
-                    logger.info(f"      Unloading {model_key}...")
                     model_manager._unload_model(model_key)
             
-            # Clear preloaded models list
             model_manager.preloaded_models.clear()
             model_manager.current_memory_gb = 0.0
             
-        # Force GPU memory cleanup
         if torch.cuda.is_available():
-            logger.info("   Clearing GPU memory...")
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
         
-        # Force garbage collection
-        logger.info("   Running garbage collection...")
         gc.collect()
         
-        # Show final memory usage
-        if torch.cuda.is_available():
-            final_memory = torch.cuda.memory_allocated() / (1024**3)
-            logger.info(f"   Final GPU memory: {final_memory:.2f}GB")
-        
-        logger.info("✅ Model cleanup completed!")
-        
     except Exception as e:
-        logger.error(f"❌ Error during model cleanup: {e}")
-
-def cleanup():
-    """Ensure cleanup happens when the API process exits."""
-    cleanup_models()
+        logger.error(f"Error during model cleanup: {e}")
 
 def shutdown_workers():
     """Shutdown worker thread gracefully."""
-    logger.info("🛑 Shutting down worker threads...")
-    # Add poison pill to stop worker
     request_queue.put(None)
 
 def initialize_app():
@@ -626,110 +501,61 @@ def initialize_app():
     global model_manager, rag_processor
     
     try:
-        # Import and get configuration
         from production_config import ProductionConfig
         
-        logger.info("🚀 Initializing Production RAG API...")
-        
-        # Initialize model manager
         model_manager = ModelManager(max_memory_gb=ProductionConfig.MAX_GPU_MEMORY_GB)
         
-        # Preload models based on configuration
+        # Preload models
         for model_key in ProductionConfig.PRELOAD_MODELS:
-            logger.info(f"⏳ Preloading {model_key}...")
             model_info = model_manager.get_model(model_key)
             if model_info and model_info.loaded:
                 model_manager.mark_as_preloaded(model_key)
-                logger.info(f"✅ Successfully preloaded {model_key}")
-            else:
-                logger.error(f"❌ Failed to preload {model_key}")
         
-        # Initialize RAG processor
         rag_processor = RAGProcessor(model_manager)
         
         # Preload embeddings if embedder is preloaded
         if "embedder" in ProductionConfig.PRELOAD_MODELS:
-            if rag_processor.preload_embeddings():
-                logger.info("✅ Embeddings and FAISS index preloaded successfully")
-            else:
-                logger.warning("⚠️  Failed to preload embeddings, will load on-demand")
+            rag_processor.preload_embeddings()
         
         # Start worker thread
         worker_thread = Thread(target=worker, daemon=True)
         worker_thread.start()
         
-        logger.info("🎉 Production RAG API initialization completed!")
-        
-        # Show configuration summary
-        logger.info(f"📊 Memory usage: {model_manager.get_gpu_memory_usage():.2f}GB")
-        logger.info(f"🔧 Preloaded models: {list(model_manager.preloaded_models)}")
-        
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize application: {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"Failed to initialize application: {e}")
         return False
 
 if __name__ == '__main__':
     import atexit
     import sys
     import signal
-    import os
     
-    # Check for auto-reload flag
     use_reloader = '--reload' in sys.argv
     
-    if use_reloader:
-        logger.warning("🔄 Auto-reload enabled - models will be properly cleaned up before restart!")
-        logger.warning("💡 Models will reload fresh after each file change")
-    
     def signal_handler(signum, frame):
-        """Handle shutdown signals to cleanup models."""
-        signal_names = {signal.SIGINT: 'SIGINT', signal.SIGTERM: 'SIGTERM'}
-        signal_name = signal_names.get(signum, f'Signal {signum}')
-        logger.info(f"🛑 Received {signal_name}, starting cleanup...")
         cleanup_models()
         shutdown_workers()
-        logger.info("👋 Goodbye!")
         sys.exit(0)
     
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
-    # Register cleanup functions for normal exit
-    atexit.register(cleanup)
+    atexit.register(cleanup_models)
     atexit.register(shutdown_workers)
     
-    # For Flask reloader, add additional cleanup on restart
-    if use_reloader:
-        def reloader_cleanup():
-            """Special cleanup for Flask reloader."""
-            logger.info("🔄 Flask reloader triggered - cleaning up before restart...")
-            cleanup_models()
-        
-        # Register for atexit (Flask calls this before restarting)
-        atexit.register(reloader_cleanup)
-    
-    # Initialize the application
     if initialize_app():
-        if use_reloader:
-            logger.info("🔧 Starting Development RAG API server with auto-reload...")
-            logger.info("📝 File changes will trigger model cleanup and reload")
-        else:
-            logger.info("🌟 Starting Production RAG API server...")
-        
         try:
             app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=use_reloader)
         except KeyboardInterrupt:
-            logger.info("🛑 Server interrupted by user")
+            pass
         except Exception as e:
-            logger.error(f"💥 Server error: {e}")
+            logger.error(f"Server error: {e}")
         finally:
-            if not use_reloader:  # Don't cleanup twice in reloader mode
+            if not use_reloader:
                 cleanup_models()
                 shutdown_workers()
     else:
-        logger.error("💥 Failed to start server due to initialization errors")
+        logger.error("Failed to start server due to initialization errors")
         exit(1)
