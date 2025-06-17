@@ -87,6 +87,7 @@ def worker():
     global active_workers
     
     while True:
+        response_queue = None
         try:
             # Get a request from the queue
             request_data = request_queue.get()
@@ -106,8 +107,13 @@ def worker():
         except Exception as e:
             logger.error(f"Error in worker: {str(e)}")
             logger.error(traceback.format_exc())
-            if 'response_queue' in locals():
-                response_queue.put(({'error': f'Internal server error: {str(e)}'}, 500))
+            # Ensure we always put something in the response queue
+            if response_queue is not None:
+                try:
+                    error_response = {'error': f'Internal server error: {str(e)}'}
+                    response_queue.put((error_response, 500))
+                except Exception as queue_error:
+                    logger.error(f"Failed to put error response in queue: {queue_error}")
         finally:
             request_queue.task_done()
             with worker_lock:
@@ -139,13 +145,15 @@ def question():
         # Add request to the queue
         request_queue.put((question, response_queue))
         
-        # Wait for the response
+        # Wait for the response with better error handling
         try:
-            result, status_code = response_queue.get(timeout=60)
+            result, status_code = response_queue.get(timeout=300)
+            logger.debug(f"Received response with status code: {status_code}")
             return jsonify(result), status_code
         except Exception as e:
-            logger.error(f"Error waiting for response: {str(e)}")
-            return jsonify({'error': 'Request processing timeout'}), 504
+            error_msg = str(e) if str(e) else "Empty response from worker"
+            logger.error(f"Error waiting for response: {error_msg}")
+            return jsonify({'error': f'Request processing failed: {error_msg}'}), 504
             
     except Exception as e:
         logger.error(f"Unexpected error in question endpoint: {str(e)}")
