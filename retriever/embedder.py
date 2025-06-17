@@ -62,11 +62,17 @@ def generate_embeddings(embeddings_folder: str,
                         chunks: List[dict], 
                         model_name: str = "intfloat/multilingual-e5-large-instruct", 
                         save_embeddings: bool = False,
-                        batch_size: int = 32) -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
+                        batch_size: int = 32,
+                        pre_loaded_embedder: SentenceTransformer = None) -> Tuple[np.ndarray, List[dict], SentenceTransformer]:
     
-    # Initialize the sentence transformer model
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SentenceTransformer(model_name, device=device)
+    # Use pre-loaded embedder if provided, otherwise initialize new one
+    if pre_loaded_embedder is not None:
+        model = pre_loaded_embedder
+        print("Using pre-loaded embedder model...")
+    else:
+        # Initialize the sentence transformer model
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = SentenceTransformer(model_name, device=device)
 
     # Prepare text list
     text_chunks = [c["text"] for c in chunks]

@@ -2,7 +2,6 @@ import torch
 from utils import load_model, free_model_memory
 from gpu_profiler import profile_function
 
-
 def print_gpu_memory():
     """Print current GPU memory usage."""
     if torch.cuda.is_available():
@@ -62,7 +61,6 @@ def build_prompt_from_chunks(question: str, chunks: list[str], enable_profiling:
                 "4. Structure longer responses with clear headers\n"
                 "5. Use bullet points for lists of specifications or requirements\n\n"
                 "Chatlantis's Technical Guidelines:\n"
-                ""
                 "6. When discussing satellite specifications, always include:\n"
                 "   - Satellite name/model\n"
                 "   - Relevant technical parameters\n"
@@ -97,7 +95,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str], enable_profiling:
                 "You are provided with independent source snippets from internal Satlantis documents.\n"
                 "Each source includes metadata and content. Use **only** the given information to answer.\n"
                 f"{'---'.join(source_blocks)}\n\n"
-                f"### Question:\n{question}"
+                f"### Answer the following question using HTML formatting:\n{question}"
             )
         }
 
@@ -143,10 +141,20 @@ def generate_answer(prompt: str, pipeline_obj=None, model_name: str = None, enab
             try:
                 output = pipeline(prompt, **generation_args)
                 answer = output[0]['generated_text'].strip()
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    print(f"Out of memory error: {e}")
+                    answer = "Out of memory error, not enough GPU memory available. Please try again with a simpler question."
+                    # Optional: clear memory
+                    torch.cuda.empty_cache()
+                else:
+                    print(f"Runtime error: {e}")
+                    answer = "A runtime error occurred. Please try again."
+
             except Exception as e:
                 print(f"Error during generation: {e}")
                 answer = "An error occurred while generating the answer. Please try again."
-            
+
             return answer
         
         finally:

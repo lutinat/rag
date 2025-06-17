@@ -14,18 +14,30 @@ def build_faiss_index(chunks: List[dict],
                       model_name: str, 
                       embeddings_folder: str, 
                       save_embeddings: bool = False,
-                      enable_profiling: bool = False) -> Tuple[faiss.IndexFlatIP, np.ndarray, SentenceTransformer]:
+                      enable_profiling: bool = False,
+                      pre_loaded_embedder: SentenceTransformer = None) -> Tuple[faiss.IndexFlatIP, np.ndarray, List[dict], SentenceTransformer]:
     """
     Build a FAISS index from text chunks using sentence embeddings.
+    
+    Args:
+        chunks: List of text chunks
+        model_name: Name of the embedder model
+        embeddings_folder: Folder to save/load embeddings
+        save_embeddings: Whether to save embeddings to file
+        enable_profiling: Whether to enable profiling
+        pre_loaded_embedder: Optional pre-loaded embedder model to reuse
     """
     # Apply conditional profiling
     @profile_function("build_faiss_index", enabled=enable_profiling)
     def _build_faiss_index():
         # Generate embeddings for the chunks
-        updated_embeddings, updated_chunks, embedder = generate_embeddings(embeddings_folder, 
-                                                                           chunks, 
-                                                                           model_name=model_name, 
-                                                                           save_embeddings=save_embeddings)
+        updated_embeddings, updated_chunks, embedder = generate_embeddings(
+            embeddings_folder, 
+            chunks, 
+            model_name=model_name, 
+            save_embeddings=save_embeddings,
+            pre_loaded_embedder=pre_loaded_embedder
+        )
 
         # Create and build the FAISS index
         print("Building FAISS index...")
@@ -73,15 +85,28 @@ def retrieve_context(question: str,
     return _retrieve_context()
 
 
-def reranker(model_name: str, query, relevant_chunks, k=3, enable_profiling: bool = False):
+def reranker(model_name: str, query, relevant_chunks, k=3, enable_profiling: bool = False, pre_loaded_reranker=None):
     """
     Rerank the top chunks and return the top-k based on similarity to the query using BGE-M3 via FlagReranker.
+    
+    Args:
+        model_name: Name of the reranker model (used if pre_loaded_reranker is None)
+        query: The query to rerank against
+        relevant_chunks: List of chunks to rerank
+        k: Number of top chunks to return
+        enable_profiling: Whether to enable profiling
+        pre_loaded_reranker: Optional pre-loaded reranker model to reuse
     """
     # Apply conditional profiling
     @profile_function("reranker", enabled=enable_profiling)
     def _reranker():
-        # Initialize the reranker
-        model = FlagReranker(model_name, use_fp16=True)
+        # Use pre-loaded reranker if provided, otherwise initialize new one
+        if pre_loaded_reranker is not None:
+            model = pre_loaded_reranker
+            print("Using pre-loaded reranker model...")
+        else:
+            # Initialize the reranker
+            model = FlagReranker(model_name, use_fp16=True)
 
         # Build context blocks with metadata
         scored_chunks = []

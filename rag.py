@@ -10,6 +10,7 @@ from retriever.retriever import reranker
 from retriever.rewriter import hyDE
 from gpu_profiler import profile_function, profile_block, print_gpu_memory, print_function_summary, save_profile_report, reset_profiler, save_all_plots
 import torch
+from typing import Optional, Tuple, Any
 
 # Load the HF token from the .env file
 load_dotenv()
@@ -25,7 +26,13 @@ phi4_model = "microsoft/Phi-4-mini-instruct"
 embedder_model = "intfloat/multilingual-e5-large-instruct"
 reranker_model = 'BAAI/bge-reranker-v2-m3'
 
-def rag(question: str, recompute_embeddings: bool = False, enable_profiling: bool = False, quantization: str = None) -> str:
+def rag(question: str, 
+        recompute_embeddings: bool = False, 
+        enable_profiling: bool = False, 
+        quantization: str = None,
+        # New parameters for production usage with preloaded models
+        preloaded_models: Optional[dict] = None,
+        preloaded_embeddings: Optional[dict] = None) -> Tuple[str, list]:
     """
     Process a question through the RAG pipeline and return an answer.
     
@@ -35,18 +42,37 @@ def rag(question: str, recompute_embeddings: bool = False, enable_profiling: boo
         enable_profiling (bool): Whether to enable GPU memory profiling
         quantization (str, optional): Type of quantization to apply to the model.
                                      Options: "4bit", "8bit", None (default: None)
+        preloaded_models (dict, optional): Dictionary with preloaded models for production usage.
+                                         Expected keys: 'llm', 'embedder', 'reranker'
+        preloaded_embeddings (dict, optional): Dictionary with preloaded embeddings data.
+                                             Expected keys: 'index', 'embedder', 'chunks'
         
     Returns:
-        str: The generated answer
+        Tuple[str, list]: The generated answer and list of source filenames
     """
     print_gpu_memory("RAG Pipeline Start", enabled=enable_profiling)
     # Reset profiler for new run
     reset_profiler(enabled=enable_profiling)
     
-    # Load the Phi-4 model once for the entire pipeline
-    print("🔧 Loading Phi-4 model for HyDE and answer generation...")
-    with profile_block("model_loading", enabled=enable_profiling):
-        model, tokenizer, pipeline_obj = load_model(phi4_model, quantization=quantization)
+    # Determine if we're using preloaded models (production mode) or loading fresh (CLI mode)
+    production_mode = preloaded_models is not None
+    
+    if production_mode:
+        print(f"🚀 PRODUCTION MODE: Using preloaded models: {list(preloaded_models.keys()) if preloaded_models else 'None'}")
+        if preloaded_embeddings:
+            print(f"🚀 PRODUCTION MODE: Using preloaded embeddings: {list(preloaded_embeddings.keys())}")
+    else:
+        print("🔧 CLI MODE: Loading models fresh...")
+    
+    # Load or use preloaded Phi-4 model
+    if production_mode and 'llm' in preloaded_models:
+        print("✅ Using preloaded Phi-4 model...")
+        pipeline_obj = preloaded_models['llm']
+        model, tokenizer = None, None  # Not needed in production mode
+    else:
+        print("🔧 Loading Phi-4 model for HyDE and answer generation...")
+        with profile_block("model_loading", enabled=enable_profiling):
+            model, tokenizer, pipeline_obj = load_model(phi4_model, quantization=quantization)
     
     try:
         # Generate the hypothetical answer (HyDE)
@@ -61,28 +87,52 @@ def rag(question: str, recompute_embeddings: bool = False, enable_profiling: boo
             else:
                 chunks = load_chunks_jsonl(chunk_path)
 
-        # Generate the embeddings, remove duplicates and build the FAISS index
+        # Handle embeddings and indexing  
         with profile_block("embedding_and_indexing", enabled=enable_profiling):
-            index, embeddings, chunks, embedder = build_faiss_index(chunks,
-                                                                    embedder_model,
-                                                                    embeddings_folder,
-                                                                    save_embeddings=recompute_embeddings,
-                                                                    enable_profiling=enable_profiling)
+            if production_mode and preloaded_embeddings and 'index' in preloaded_embeddings:
+                # Use preloaded embeddings and index
+                print("🔧 Using preloaded embeddings and FAISS index...")
+                index = preloaded_embeddings['index']
+                embedder = preloaded_embeddings['embedder']
+                chunks = preloaded_embeddings['chunks']
+            elif production_mode and 'embedder' in preloaded_models:
+                # Use preloaded embedder to build index
+                print("🔧 Using preloaded embedder, building FAISS index...")
+                index, embeddings, chunks, embedder = build_faiss_index(chunks,
+                                                                        embedder_model,
+                                                                        embeddings_folder,
+                                                                        save_embeddings=recompute_embeddings,
+                                                                        enable_profiling=enable_profiling,
+                                                                        pre_loaded_embedder=preloaded_models['embedder'])
+            else:
+                # Traditional mode: build everything from scratch
+                index, embeddings, chunks, embedder = build_faiss_index(chunks,
+                                                                        embedder_model,
+                                                                        embeddings_folder,
+                                                                        save_embeddings=recompute_embeddings,
+                                                                        enable_profiling=enable_profiling)
 
-        if recompute_embeddings:
-            # Save all chunks to a single JSONL file
+        if recompute_embeddings and not production_mode:
+            # Save all chunks to a single JSONL file (only in CLI mode)
             save_chunks_jsonl(chunks, chunk_path)
             print(f"Saved all chunks to {chunk_path}")
 
-        # Retrieve the top-20 chunks
+        # Retrieve the top-30 chunks
         with profile_block("context_retrieval", enabled=enable_profiling):
             print("Retrieving context...")
             top_chunks = retrieve_context(hyde_answer, embedder, chunks, index, k=30, enable_profiling=enable_profiling)
 
-        # Rerank to get the top-3 chunks
+        # Rerank to get the top-4 chunks
         with profile_block("reranking", enabled=enable_profiling):
             print("Reranking...")
-            reranked_chunks = reranker(reranker_model, question, top_chunks, k=4, enable_profiling=enable_profiling)
+            if production_mode and 'reranker' in preloaded_models:
+                # Use preloaded reranker
+                reranked_chunks = reranker(reranker_model, question, top_chunks, k=4, 
+                                         enable_profiling=enable_profiling, 
+                                         pre_loaded_reranker=preloaded_models['reranker'])
+            else:
+                # Traditional reranking
+                reranked_chunks = reranker(reranker_model, question, top_chunks, k=4, enable_profiling=enable_profiling)
 
         # Generate the prompt
         with profile_block("prompt_generation", enabled=enable_profiling):
@@ -111,11 +161,13 @@ def rag(question: str, recompute_embeddings: bool = False, enable_profiling: boo
         return answer, sources
     
     finally:
-        # Clean up the model at the end of the pipeline
-        free_model_memory(pipeline_obj)
-        del model, tokenizer, pipeline_obj
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        # Clean up the model only if we loaded it fresh (not in production mode)
+        if not production_mode:
+            free_model_memory(pipeline_obj)
+            if model is not None:
+                del model, tokenizer, pipeline_obj
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     # Parse the arguments
