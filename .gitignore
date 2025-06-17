@@ -6,6 +6,7 @@
 *.npy
 *.png
 *.zip
+*.log
 .env
 
 # Ignore all files in the inference/models directory
