@@ -86,6 +86,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str], enable_profiling:
                 "14. If uncertain about any aspect, explicitly state it and why\n"
                 "15. Always prioritize accuracy over completeness - it's better to say 'I don't know' than to make assumptions"
                 "16. Be brief and to the point. Don't be redundant. Do not use unnecessary words."
+                "17. You must answer using the same language as the question."
             )
         }
 
@@ -95,7 +96,7 @@ def build_prompt_from_chunks(question: str, chunks: list[str], enable_profiling:
                 "You are provided with independent source snippets from internal Satlantis documents.\n"
                 "Each source includes metadata and content. Use **only** the given information to answer.\n"
                 f"{'---'.join(source_blocks)}\n\n"
-                f"### Answer the following question using HTML formatting:\n{question}"
+                f"### Answer the following question using HTML formatting, and using the same language as the question:\n{question}"
             )
         }
 
