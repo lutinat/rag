@@ -7,7 +7,7 @@ from data_processing.data_extraction.chunker import get_all_chunks
 from dotenv import load_dotenv
 from inference.infer import build_prompt_from_chunks, generate_answer
 from retriever.retriever import reranker
-from retriever.rewriter import hyDE
+from retriever.rewriter import hyDE, rewrite
 from gpu_profiler import profile_function, profile_block, print_gpu_memory, print_function_summary, save_profile_report, reset_profiler, save_all_plots
 import torch
 from typing import Optional, Tuple, Any
@@ -75,9 +75,16 @@ def rag(question: str,
             model, tokenizer, pipeline_obj = load_model(phi4_model, quantization=quantization)
     
     try:
-        # Generate the hypothetical answer (HyDE)
+        # # Rewrite the question to improve grammar and formality while preserving technical accuracy
+        # with profile_block("question_rewriting", enabled=enable_profiling):
+        #     rewritten_question = rewrite(question, pipeline_obj=pipeline_obj, enable_profiling=enable_profiling)
+        # print(f"Original question: {question}")
+        # print(f"Rewritten question: {rewritten_question}")
+        rewritten_question = question
+
+        # Generate the hypothetical answer (HyDE) using the rewritten question
         with profile_block("HyDE_generation", enabled=enable_profiling):
-            hyde_answer = hyDE(question, pipeline_obj=pipeline_obj, enable_profiling=enable_profiling)
+            hyde_answer = hyDE(rewritten_question, pipeline_obj=pipeline_obj, enable_profiling=enable_profiling)
         print("HyDE : ", hyde_answer)
 
         # Extract and save chunks from the documents
@@ -127,17 +134,17 @@ def rag(question: str,
             print("Reranking...")
             if production_mode and 'reranker' in preloaded_models:
                 # Use preloaded reranker
-                reranked_chunks = reranker(reranker_model, question, top_chunks, k=4, 
+                reranked_chunks = reranker(reranker_model, rewritten_question, top_chunks, k=4, 
                                          enable_profiling=enable_profiling, 
                                          pre_loaded_reranker=preloaded_models['reranker'])
             else:
                 # Traditional reranking
-                reranked_chunks = reranker(reranker_model, question, top_chunks, k=4, enable_profiling=enable_profiling)
+                reranked_chunks = reranker(reranker_model, rewritten_question, top_chunks, k=4, enable_profiling=enable_profiling)
 
         # Generate the prompt
         with profile_block("prompt_generation", enabled=enable_profiling):
             print("Generating prompt...")
-            prompt = build_prompt_from_chunks(question, reranked_chunks, enable_profiling=enable_profiling)
+            prompt = build_prompt_from_chunks(rewritten_question, reranked_chunks, enable_profiling=enable_profiling)
 
         # Generate the answer
         with profile_block("answer_generation", enabled=enable_profiling):
