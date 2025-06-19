@@ -47,7 +47,7 @@ def rag(question: str,
                                          Expected keys: 'llm', 'embedder', 'reranker'
         preloaded_embeddings (dict, optional): Dictionary with preloaded embeddings data.
                                              Expected keys: 'index', 'embedder', 'chunks'
-        conversation_history (list, optional): List of dictionaries with 'question' and 'answer' keys.
+        conversation_history (list, optional): List of dictionaries with 'user' and 'assistant' keys.
     Returns:
         Tuple[str, list]: The generated answer and list of source filenames
     """
