@@ -20,6 +20,7 @@ interface Chat {
   id: number;
   title: string;
   messages: Message[];
+  chatId?: string; // Backend chat ID for conversation history
 }
 
 @Component({
@@ -65,7 +66,8 @@ export class ChatComponent {
     const newChat: Chat = {
       id: this.chatIdCounter++,
       title: 'New chat',
-      messages: []
+      messages: [],
+      chatId: this.apiService.generateChatId()
     };
     this.chats.unshift(newChat);
     this.selectedChatId = newChat.id;
@@ -116,7 +118,12 @@ export class ChatComponent {
       this.isWaitingForBot = true;
       this.inputValue = '';
 
-      this.apiService.getAnswer(userQuestion).subscribe(response => {
+      const chatId = this.selectedChat.chatId || this.apiService.generateChatId();
+      if (!this.selectedChat.chatId) {
+        this.selectedChat.chatId = chatId;
+      }
+      
+      this.apiService.getAnswer(userQuestion, chatId).subscribe(response => {
         const sources = response.sources ? response.sources.map((source: string) => ({ name: source })) : [];
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
