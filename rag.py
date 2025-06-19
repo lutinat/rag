@@ -32,7 +32,8 @@ def rag(question: str,
         quantization: str = None,
         # New parameters for production usage with preloaded models
         preloaded_models: Optional[dict] = None,
-        preloaded_embeddings: Optional[dict] = None) -> Tuple[str, list]:
+        preloaded_embeddings: Optional[dict] = None,
+        conversation_history: Optional[list] = None) -> Tuple[str, list]:
     """
     Process a question through the RAG pipeline and return an answer.
     
@@ -46,14 +47,14 @@ def rag(question: str,
                                          Expected keys: 'llm', 'embedder', 'reranker'
         preloaded_embeddings (dict, optional): Dictionary with preloaded embeddings data.
                                              Expected keys: 'index', 'embedder', 'chunks'
-        
+        conversation_history (list, optional): List of dictionaries with 'question' and 'answer' keys.
     Returns:
         Tuple[str, list]: The generated answer and list of source filenames
     """
     print_gpu_memory("RAG Pipeline Start", enabled=enable_profiling)
     # Reset profiler for new run
     reset_profiler(enabled=enable_profiling)
-    
+    print("Conversation history : ", conversation_history)
     # Determine if we're using preloaded models (production mode) or loading fresh (CLI mode)
     production_mode = preloaded_models is not None
     

@@ -282,7 +282,7 @@ class RAGProcessor:
             self.chunks = None
             return False
             
-    def process_question(self, question: str, quantization: str = None) -> Tuple[Dict[str, Any], int]:
+    def process_question(self, question: str, quantization: str = None, conversation_history: List[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], int]:
         """Process a question using the rag.py function with preloaded models."""
         if quantization is None:
             from config import ProductionConfig
@@ -320,7 +320,8 @@ class RAGProcessor:
                 enable_profiling=False,
                 quantization=quantization,
                 preloaded_models=preloaded_models if preloaded_models else None,
-                preloaded_embeddings=preloaded_embeddings if preloaded_embeddings else None
+                preloaded_embeddings=preloaded_embeddings if preloaded_embeddings else None,
+                conversation_history=conversation_history
             )
             
             return {
@@ -513,7 +514,10 @@ def worker():
             question, chat_id, quantization, conversation_history, response_queue = request_data
             
             # Process the question
-            result, status_code = rag_processor.process_question(question, quantization)
+            result, status_code = rag_processor.process_question(question, 
+                                                                 quantization, 
+                                                                 conversation_history=conversation_history
+                                                                 )
             
             # Send response first, then add to conversation history
             response_queue.put((result, status_code))
@@ -555,27 +559,21 @@ def question():
         if not question:
             return jsonify({'error': 'No question provided'}), 400
         
-        # Get chat_id and conversation_history from request
+        # Get chat_id and quantization from request
         chat_id = data.get('chat_id')
-        conversation_history = data.get('conversation_history', [])
         quantization = data.get('quantization', None)
         
         # chat_id is required for proper conversation tracking
         if not chat_id:
             return jsonify({'error': 'chat_id is required for conversation tracking'}), 400
         
-        # Validate conversation_history format if provided
-        if conversation_history and not isinstance(conversation_history, list):
-            return jsonify({'error': 'conversation_history must be a list'}), 400
+        # ✅ Récupérer l'historique stocké pour ce chat_id
+        if conversation_manager:
+            conversation_history = conversation_manager.get_history(chat_id, max_turns=10)
+        else:
+            conversation_history = []
         
-        # Validate each turn in conversation_history
-        for i, turn in enumerate(conversation_history):
-            if not isinstance(turn, dict) or 'user' not in turn or 'assistant' not in turn:
-                return jsonify({
-                    'error': f'conversation_history[{i}] must be a dict with "user" and "assistant" keys'
-                }), 400
-        
-        logger.info(f"Processing question for chat {chat_id} with {len(conversation_history)} previous turns")
+        logger.info(f"Processing question for chat {chat_id} with {len(conversation_history)} stored turns")
             
         response_queue = Queue()
         request_queue.put((question, chat_id, quantization, conversation_history, response_queue))
