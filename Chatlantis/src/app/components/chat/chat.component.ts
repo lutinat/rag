@@ -7,7 +7,11 @@ import { EditChatModalComponent } from '../edit-chat-modal/edit-chat-modal.compo
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 interface Source {
-  name: string;
+  filename: string;
+  url?: string;
+  title?: string;
+  source_type: string;
+  display_name: string;
 }
 
 interface Message {
@@ -117,7 +121,7 @@ export class ChatComponent {
       this.inputValue = '';
 
       this.apiService.getAnswer(userQuestion).subscribe(response => {
-        const sources = response.sources ? response.sources.map((source: string) => ({ name: source })) : [];
+        const sources = response.sources || [];
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
         this.selectedChat?.messages.push({

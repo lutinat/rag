@@ -16,7 +16,7 @@ USER_AGENTS = [
 ]
 
 visited = set()
-paragraphs = []
+scraped_data = []  # Changed from paragraphs to scraped_data to include metadata
 
 def get_random_user_agent():
     return random.choice(USER_AGENTS)
@@ -35,11 +35,25 @@ def scrape(url, base_url):
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Extract and save paragraph texts
+        # Extract and save paragraph texts with metadata
+        page_paragraphs = []
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
-            if text:
-                paragraphs.append(text)
+            if text and len(text) > 50:  # Only keep meaningful paragraphs
+                page_paragraphs.append({
+                    'text': text,
+                    'url': url,
+                    'title': soup.title.string if soup.title else None
+                })
+        
+        # Add page data with metadata
+        if page_paragraphs:
+            page_data = {
+                'url': url,
+                'paragraphs': page_paragraphs,
+                'title': soup.title.string if soup.title else None
+            }
+            scraped_data.append(page_data)
 
         # Find and process all internal links
         for a_tag in soup.find_all('a', href=True):
@@ -54,19 +68,25 @@ def scrape(url, base_url):
         print(f"Failed to retrieve {url}: {e}")
 
 
-def save_to_txt(paragraphs, file_path):
+def save_to_txt_with_urls(scraped_data, file_path):
     with open(file_path, 'w', encoding='utf-8') as f:
-        for paragraph in paragraphs:
-            f.write(paragraph + '\n\n')  # Add a blank line between paragraphs
-    print(f"Saved TXT to {file_path}")
+        for page in scraped_data:
+            url = page['url']
+            for paragraph in page['paragraphs']:
+                # paragraph est un dict, on prend le texte
+                text = paragraph['text'] if isinstance(paragraph, dict) else paragraph
+                f.write(f'# URL: {url}\n')
+                f.write(text + '\n\n')
+    print(f"Saved TXT with URLs to {file_path}")
 
 
 # Starting point
 base_url = 'https://www.satlantis.com'
 scrape(base_url, base_url)
 
-# Save paragraphs to PDF
-output_pdf_path = '/home/lucasd/code/rag/data/' + base_url.split('/')[-1] + '.txt'
-save_to_txt(paragraphs, output_pdf_path)
+# Save scraped data to TXT (with URLs)
+output_txt_path = '/home/elduayen/rag/data/' + base_url.split('/')[-1] + '.txt'
+save_to_txt_with_urls(scraped_data, output_txt_path)
 
-print(f"Total paragraphs scraped: {len(paragraphs)}")
+print(f"Total pages scraped: {len(scraped_data)}")
+print(f"Total paragraphs scraped: {sum(len(page['paragraphs']) for page in scraped_data)}")

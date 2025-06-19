@@ -275,6 +275,127 @@ def create_chunks_from_sentences(sentences: List[str],
   
     return chunks
 
+def extract_urls_from_text(text: str) -> List[str]:
+    """
+    Extract URLs from text that contains '# URL: ...' lines.
+    
+    Args:
+        text: Text content with URL markers
+        
+    Returns:
+        List of URLs found in the text
+    """
+    urls = []
+    lines = text.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith('# URL:'):
+            url = line.replace('# URL:', '').strip()
+            if url:
+                urls.append(url)
+    
+    return urls
+
+def extract_chunks_with_urls(text: str, source_name: str) -> List[Dict]:
+    """
+    Extract chunks from text that contains URL markers.
+    Each chunk will have the URL of the paragraph it comes from.
+    
+    Args:
+        text: Text content with URL markers
+        source_name: Name of the source file
+        
+    Returns:
+        List of chunks with URL metadata
+    """
+    chunks = []
+    lines = text.split('\n')
+    current_paragraph = []
+    current_url = None
+    current_chunk_id = 0
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Check if this is a URL marker
+        if line.startswith('# URL:'):
+            # Process previous paragraph if exists
+            if current_paragraph and current_url:
+                paragraph_text = ' '.join(current_paragraph)
+                if len(paragraph_text.strip()) > 10:  # Skip very short paragraphs
+                    # Create metadata with URL
+                    metadata = {
+                        'filename': os.path.basename(source_name),
+                        'url': current_url,
+                        'source_type': 'web_scraped'
+                    }
+                    
+                    # For web content, create chunks directly from the paragraph
+                    # without going through create_paragraphs which filters too strictly
+                    cleaned_text = clean_text(paragraph_text)
+                    if cleaned_text and len(cleaned_text.strip()) > 10:
+                        # Split into sentences
+                        sentences = split_into_sentences(cleaned_text)
+                        
+                        # Filter out noise sentences but be less strict
+                        filtered_sentences = []
+                        for sentence in sentences:
+                            if len(sentence.strip()) > 5 and not is_noise(sentence):
+                                filtered_sentences.append(sentence)
+                        
+                        if filtered_sentences:
+                            # Create chunks from sentences with lower thresholds
+                            paragraph_chunks = create_chunks_from_sentences(
+                                filtered_sentences,
+                                overlap=0.2,
+                                min_chunk_tokens=20,  # Much lower threshold for web content
+                                max_chunk_tokens=500,
+                                source_name=f"{source_name}_p{current_chunk_id}",
+                                metadata=metadata
+                            )
+                            chunks.extend(paragraph_chunks)
+                            current_chunk_id += 1
+            
+            # Start new paragraph
+            current_url = line.replace('# URL:', '').strip()
+            current_paragraph = []
+            
+        elif line:  # Non-empty line that's not a URL marker
+            current_paragraph.append(line)
+    
+    # Process the last paragraph
+    if current_paragraph and current_url:
+        paragraph_text = ' '.join(current_paragraph)
+        if len(paragraph_text.strip()) > 10:
+            metadata = {
+                'filename': os.path.basename(source_name),
+                'url': current_url,
+                'source_type': 'web_scraped'
+            }
+            
+            cleaned_text = clean_text(paragraph_text)
+            if cleaned_text and len(cleaned_text.strip()) > 10:
+                sentences = split_into_sentences(cleaned_text)
+                
+                filtered_sentences = []
+                for sentence in sentences:
+                    if len(sentence.strip()) > 5 and not is_noise(sentence):
+                        filtered_sentences.append(sentence)
+                
+                if filtered_sentences:
+                    paragraph_chunks = create_chunks_from_sentences(
+                        filtered_sentences,
+                        overlap=0.2,
+                        min_chunk_tokens=20,
+                        max_chunk_tokens=500,
+                        source_name=f"{source_name}_p{current_chunk_id}",
+                        metadata=metadata
+                    )
+                    chunks.extend(paragraph_chunks)
+    
+    return chunks
+
 def extract_chunks(text: str, source_name: str, metadata: Dict) -> List[Dict]:
     """Extract chunks from the text."""
     # Get the sentences from the text
@@ -375,8 +496,19 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     for txt_path in tqdm(txt_paths):
         # print(f"Processing {txt_path}")
         text = load_txt_web(txt_path)
-        metadata = {'filename': os.path.basename(txt_path)}
-        chunks = extract_chunks(text, source_name=txt_path, metadata=metadata)
+        
+        # Check if this is a web scraped file with URLs
+        urls = extract_urls_from_text(text)
+        
+        if urls:
+            # This is a web scraped file with URLs
+            print(f"  Found {len(urls)} URLs in {os.path.basename(txt_path)}")
+            chunks = extract_chunks_with_urls(text, txt_path)
+        else:
+            # Regular TXT file
+            metadata = {'filename': os.path.basename(txt_path)}
+            chunks = extract_chunks(text, source_name=txt_path, metadata=metadata)
+        
         all_chunks.extend(chunks)
 
         # Generate a filename for the JSONL chunk file based on the TXT name
@@ -395,6 +527,6 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
 
 if __name__ == "__main__":
     
-    folder_path = "/home/lucasd/code/rag/data/"
-    chunk_folder_path = "/home/lucasd/code/rag/processed_data/"
+    folder_path = "/home/elduayen/rag/data/"
+    chunk_folder_path = "/home/elduayen/rag/processed_data/"
     get_all_chunks(folder_path, chunk_folder_path)
