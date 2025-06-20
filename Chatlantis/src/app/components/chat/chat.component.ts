@@ -151,22 +151,20 @@ export class ChatComponent {
     const chatToDelete = this.chats.find(chat => chat.id === id);
     if (!chatToDelete) return;
 
-    // If the chat has a backend chatId, delete it from the backend first
+    // Remove from frontend immediately for responsive UI
+    this.removeChatFromFrontend(id);
+
+    // If the chat has a backend chatId, delete it from the backend asynchronously
     if (chatToDelete.chatId) {
       this.apiService.clearChatHistory(chatToDelete.chatId).subscribe({
         next: (response) => {
           console.log('Chat deleted from backend:', response);
-          this.removeChatFromFrontend(id);
         },
         error: (error) => {
-          console.error('Error deleting chat from backend:', error);
-          // Still remove from frontend even if backend deletion fails
-          this.removeChatFromFrontend(id);
+          console.error('Error deleting chat from backend (chat already removed from UI):', error);
+          // Chat is already removed from frontend, so just log the error
         }
       });
-    } else {
-      // If no backend chatId, just remove from frontend
-      this.removeChatFromFrontend(id);
     }
   }
 
