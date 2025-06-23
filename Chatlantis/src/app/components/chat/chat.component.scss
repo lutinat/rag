@@ -24,14 +24,21 @@
   }
 
   ul {
-    margin: 0.75rem 0;
-    padding-left: 1.5rem;
-    list-style-type: disc;
+    margin: 0.75rem 0 !important;
+    padding-left: 1.5rem !important;
+    list-style-type: disc !important;
+  }
+
+  ol {
+    margin: 0.75rem 0 !important;
+    padding-left: 1.5rem !important;
+    list-style-type: decimal !important;
   }
 
   li {
-    margin: 0.5rem 0;
-    line-height: 1.5;
+    margin: 0.5rem 0 !important;
+    line-height: 1.5 !important;
+    display: list-item !important;
   }
 
   b {

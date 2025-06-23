@@ -86,7 +86,10 @@ def rag(question: str,
 
         # Generate the hypothetical answer (HyDE) using the rewritten question
         with profile_block("HyDE_generation", enabled=enable_profiling):
-            hyde_answer = hyDE(rewritten_question, pipeline_obj=pipeline_obj, enable_profiling=enable_profiling)
+            hyde_answer = hyDE(rewritten_question, 
+                               pipeline_obj=pipeline_obj, 
+                               enable_profiling=enable_profiling, 
+                               conversation_history=conversation_history)
         print("HyDE : ", hyde_answer)
 
         # Extract and save chunks from the documents
@@ -146,7 +149,10 @@ def rag(question: str,
         # Generate the prompt
         with profile_block("prompt_generation", enabled=enable_profiling):
             print("Generating prompt...")
-            prompt = build_prompt_from_chunks(rewritten_question, reranked_chunks, enable_profiling=enable_profiling)
+            prompt = build_prompt_from_chunks(rewritten_question, 
+                                              reranked_chunks, 
+                                              enable_profiling=enable_profiling,
+                                              conversation_history=conversation_history)
 
         # Generate the answer
         with profile_block("answer_generation", enabled=enable_profiling):
