@@ -89,70 +89,6 @@ def generate_qa_pair(pipe, text):
 
 def process_jsonl_files(input_folder, output_jsonl, pipe, max_questions=1000):
     """
-    Process all JSONL files in the input folder and generate QA pairs using streaming.
-    
-    Args:
-        input_folder: Path to folder containing JSONL files
-        output_jsonl: Path to output JSONL file
-        pipe: The model pipeline to use
-        max_questions: Maximum number of questions to generate
-    """
-    import random
-    
-    # Get all JSONL files in the input folder
-    jsonl_files = glob.glob(os.path.join(input_folder, "*.jsonl"))
-    print(f"Found {len(jsonl_files)} JSONL files in {input_folder}")
-    
-    # Shuffle the files for randomness
-    random.shuffle(jsonl_files)
-    
-    s = 0
-    with open(output_jsonl, "w") as f_out:
-        for jsonl_file in jsonl_files:
-            print(f"Processing {jsonl_file}")
-            
-            # Stream process each file
-            with open(jsonl_file, "r") as f_in:
-                lines = f_in.readlines()
-                random.shuffle(lines)  # Shuffle lines within each file
-                
-                for line in tqdm(lines, desc=f"Processing {os.path.basename(jsonl_file)}"):
-                    if s >= max_questions:
-                        print(f"Reached max questions limit: {max_questions}")
-                        return
-                        
-                    try:
-                        data = json.loads(line.strip())
-                        text = data.get("text", "")
-                        if len(text.strip()) < 20:
-                            continue  # skip too short texts
-
-                        question, answer = generate_qa_pair(pipe, text)
-                        if question != "No question":
-                            # Write immediately to avoid memory buildup
-                            f_out.write(json.dumps({
-                                "question": question, 
-                                "answer": answer, 
-                                "context": text,
-                            }) + "\n")
-                            f_out.flush()  # Force write to disk
-                            s += 1
-                            
-                    except json.JSONDecodeError:
-                        print(f"Skipping invalid JSON line in {jsonl_file}")
-                        continue
-                    except Exception as e:
-                        print(f"Error processing line: {e}")
-                        continue
-                
-                # Clear lines from memory after processing each file
-                del lines
-                
-    print(f"Generated {s} QA pairs and saved to {output_jsonl}")
-
-
-def process_jsonl_files_ultra_streaming(input_folder, output_jsonl, pipe, max_questions=1000):
-    """
     Ultra memory-efficient streaming version that processes one line at a time.
     
     Args:
@@ -223,5 +159,5 @@ if __name__ == "__main__":
     max_questions = 100
 
     # Use ultra streaming for minimal memory usage
-    process_jsonl_files_ultra_streaming(input_folder, output_jsonl, pipe, max_questions)
+    process_jsonl_files(input_folder, output_jsonl, pipe, max_questions)
     
