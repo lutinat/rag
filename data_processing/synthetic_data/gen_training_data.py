@@ -1,27 +1,29 @@
 import os
+import sys
+import glob
+
+# Add the project root directory to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.append(project_root)
+
 import json
 from tqdm import tqdm
 from utils import load_model
-import hdbscan
-from collections import defaultdict
-from sentence_transformers import SentenceTransformer
-import umap
-import matplotlib.pyplot as plt
 
-def generate_question(pipe, text):
+def generate_qa_pair(pipe, text):
     """
-    Generate a question based on the provided text using a language model.
-    Can be used for Fine-tuning, or as a validation step.
+    Generate a question and answer pair based on the provided text using a language model.
     
     Args:   
         pipe: The language model pipeline to use for generation.
-        text (str): The input text to generate a question from.
+        text (str): The input text to generate a QA pair from.
     
     Returns:
-        str: The generated question.
+        tuple: The generated (question, answer) pair.
     """
 
-    messages = [
+    # First generate the question
+    question_messages = [
         {
             "role": "system",
             "content": (
@@ -31,7 +33,7 @@ def generate_question(pipe, text):
                 "Do not repeat the same structure every time. "
                 "Focus on facts, implications, causes, purposes, methods, places, persons, or events and reflect realistic user search behavior. "
                 "Never include explanations, context, or any mention of 'the text', 'this document', or similar phrases. "
-                "The question should be very short, and very consice, and should not exceed 15 words.  "
+                "The question should be very short, and very concise, and should not exceed 15 words. "
                 "Only return a self-contained question. If nothing useful can be asked, return 'No question'."
             ),
         },
@@ -41,48 +43,185 @@ def generate_question(pipe, text):
         },
     ]
 
-    output = pipe(
-        messages,
+    question_output = pipe(
+        question_messages,
         max_new_tokens=50,
         return_full_text=False,
         temperature=0.3,
         do_sample=True,
         top_p=0.9,
     )
+    
+    question = question_output[0]['generated_text'].strip()
+    
+    # Then generate the answer based on the question and original text
+    answer_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an AI assistant for Satlantis, a company in the space sector. "
+                "Your task is to provide a clear, concise, and accurate answer to the given question based on the provided context. "
+                "The answer should be factual and directly address the question. "
+                "Write a complete sentence, and reintroduce the question in the answer. "
+                "Keep the answer focused and relatively short (3 sentences maximum). "
+                "Only include information that is directly relevant to answering the question."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Context: {text.strip()}\n\nQuestion: {question}\n\nProvide a concise answer:",
+        },
+    ]
 
-    return output[0]['generated_text'].strip()
+    answer_output = pipe(
+        answer_messages,
+        max_new_tokens=150,
+        return_full_text=False,
+        temperature=0.3,
+        do_sample=True,
+        top_p=0.9,
+    )
+    
+    answer = answer_output[0]['generated_text'].strip()
+    
+    return question, answer
+
+
+def process_jsonl_files(input_folder, output_jsonl, pipe, max_questions=1000):
+    """
+    Process all JSONL files in the input folder and generate QA pairs using streaming.
+    
+    Args:
+        input_folder: Path to folder containing JSONL files
+        output_jsonl: Path to output JSONL file
+        pipe: The model pipeline to use
+        max_questions: Maximum number of questions to generate
+    """
+    import random
+    
+    # Get all JSONL files in the input folder
+    jsonl_files = glob.glob(os.path.join(input_folder, "*.jsonl"))
+    print(f"Found {len(jsonl_files)} JSONL files in {input_folder}")
+    
+    # Shuffle the files for randomness
+    random.shuffle(jsonl_files)
+    
+    s = 0
+    with open(output_jsonl, "w") as f_out:
+        for jsonl_file in jsonl_files:
+            print(f"Processing {jsonl_file}")
+            
+            # Stream process each file
+            with open(jsonl_file, "r") as f_in:
+                lines = f_in.readlines()
+                random.shuffle(lines)  # Shuffle lines within each file
+                
+                for line in tqdm(lines, desc=f"Processing {os.path.basename(jsonl_file)}"):
+                    if s >= max_questions:
+                        print(f"Reached max questions limit: {max_questions}")
+                        return
+                        
+                    try:
+                        data = json.loads(line.strip())
+                        text = data.get("text", "")
+                        if len(text.strip()) < 20:
+                            continue  # skip too short texts
+
+                        question, answer = generate_qa_pair(pipe, text)
+                        if question != "No question":
+                            # Write immediately to avoid memory buildup
+                            f_out.write(json.dumps({
+                                "question": question, 
+                                "answer": answer, 
+                                "context": text,
+                            }) + "\n")
+                            f_out.flush()  # Force write to disk
+                            s += 1
+                            
+                    except json.JSONDecodeError:
+                        print(f"Skipping invalid JSON line in {jsonl_file}")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing line: {e}")
+                        continue
+                
+                # Clear lines from memory after processing each file
+                del lines
+                
+    print(f"Generated {s} QA pairs and saved to {output_jsonl}")
+
+
+def process_jsonl_files_ultra_streaming(input_folder, output_jsonl, pipe, max_questions=1000):
+    """
+    Ultra memory-efficient streaming version that processes one line at a time.
+    
+    Args:
+        input_folder: Path to folder containing JSONL files
+        output_jsonl: Path to output JSONL file
+        pipe: The model pipeline to use
+        max_questions: Maximum number of questions to generate
+    """
+    import random
+    
+    # Get all JSONL files in the input folder
+    jsonl_files = glob.glob(os.path.join(input_folder, "*.jsonl"))
+    print(f"Found {len(jsonl_files)} JSONL files in {input_folder}")
+    
+    # Shuffle the files for randomness
+    random.shuffle(jsonl_files)
+    
+    s = 0
+    with open(output_jsonl, "w") as f_out:
+        for jsonl_file in jsonl_files:
+            print(f"Streaming {jsonl_file}")
+            
+            # Count total lines for progress bar
+            with open(jsonl_file, 'r') as f:
+                total_lines = sum(1 for _ in f)
+            
+            # Stream process line by line
+            with open(jsonl_file, "r") as f_in:
+                with tqdm(total=total_lines, desc=f"Streaming {os.path.basename(jsonl_file)}") as pbar:
+                    for line in f_in:
+                        if s >= max_questions:
+                            print(f"Reached max questions limit: {max_questions}")
+                            return
+                            
+                        try:
+                            data = json.loads(line.strip())
+                            text = data.get("text", "")
+                            if len(text.strip()) < 20:
+                                pbar.update(1)
+                                continue  # skip too short texts
+
+                            question, answer = generate_qa_pair(pipe, text)
+                            if question != "No question":
+                                # Write immediately to avoid memory buildup
+                                f_out.write(json.dumps({
+                                    "question": question, 
+                                    "answer": answer, 
+                                    "context": text,
+                                }) + "\n")
+                                f_out.flush()  # Force write to disk
+                                s += 1
+                                
+                        except json.JSONDecodeError:
+                            print(f"Skipping invalid JSON line in {jsonl_file}")
+                        except Exception as e:
+                            print(f"Error processing line: {e}")
+                        finally:
+                            pbar.update(1)
+                
+    print(f"Generated {s} QA pairs and saved to {output_jsonl}")
 
 
 if __name__ == "__main__":
-    _, _, pipe = load_model("microsoft/Phi-4-mini-instruct")
+    _, _, pipe = load_model("microsoft/Phi-4-mini-instruct")  # Use 4bit quantization
 
-    input_jsonl = "/home/lucasd/code/rag/processed_data/www.satlantis.com_chunks.jsonl"
+    input_folder = "/home/lucasd/code/rag/data/data1"  # Folder containing JSONL files
     output_jsonl = "/home/lucasd/code/rag/data_processing/generated_questions.jsonl"
-    max_questions = 1000
+    max_questions = 100
 
-    with open(input_jsonl, "r") as f:
-        lines = f.readlines()
-
-    # shuffle the lines to randomize the order
-    import random
-    random.shuffle(lines)
-
-    s = 0
-    with open(output_jsonl, "w") as f_out:
-        for line in tqdm(lines, desc="Generating questions"):
-            data = json.loads(line)
-            text = data.get("text", "")
-            if len(text.strip()) < 20:
-                continue  # skip too short texts
-
-            try:
-                question = generate_question(pipe, text)
-                f_out.write(json.dumps({"question": question}) + "\n")
-            except Exception as e:
-                print(f"Error: {e}")
-                continue
-            s += 1
-            if s > max_questions:
-                break
-    print(f"Generated {s} questions and saved to {output_jsonl}")
+    # Use ultra streaming for minimal memory usage
+    process_jsonl_files_ultra_streaming(input_folder, output_jsonl, pipe, max_questions)
     
