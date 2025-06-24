@@ -233,9 +233,10 @@ def hyDE(question: str,
                     "2. **Use context clues**: If conversation mentions entities, incorporate them naturally\n"
                     "3. **Stay domain-realistic**: Generate plausible satellite/space technology content.\n"
                     "4. **Avoid unrealistic information**: Do not make up information that can bias the retrieval.\n"
-                    "5. **Be specific**: Include concrete details like dates, specifications, capabilities\n"
-                    "6. **Use question vocabulary**: Include key terms from the question\n"
-                    "7. **Plain text only**: No HTML formatting\n"
+                    "5. **Use the conversation history**: If it exists, use it to generate a sentence about the topic being discussed.\n"
+                    "6. **Be specific**: Include concrete details like dates, specifications, capabilities\n"
+                    "7. **Use question vocabulary**: Include key terms from the question\n"
+                    "8. **Plain text only**: No HTML formatting\n"
                     "\n"
                     "CONTENT PATTERNS TO GENERATE:\n"
                     "- Launch dates and mission timelines\n"
@@ -243,15 +244,6 @@ def hyDE(question: str,
                     "- Instrument capabilities and features\n"
                     "- Orbital parameters and operational details\n"
                     "- Mission objectives and applications\n"
-                    "\n"
-                    "EXAMPLE TRANSFORMATIONS:\n"
-                    "Question: 'When was TALISMAN launched?'\n"
-                    "Good: 'TALISMAN was launched in Q2 2024 aboard a Falcon 9 rocket'\n"
-                    "Bad: 'The launch date has not been specified'\n"
-                    "\n"
-                    "Question: 'What is the GSD of GARAI?'\n"
-                    "Good: 'GARAI achieves 2m resolution in VNIR bands and 5m in SWIR bands'\n"
-                    "Bad: 'The GSD specifications are not provided'\n"
                     "\n"
                     "Generate confident, specific technical statements that sound like they come from real documentation.\n"
                 )
@@ -269,7 +261,7 @@ def hyDE(question: str,
             # Only add conversation history section if it exists
             if conversation_history_prompt:
                 user_prompt_content += f"### Previous conversation context:\n{conversation_history_prompt}\n"
-                user_prompt_content += "Generate a realistic technical sentence about the topic being discussed. You can use the conversation history to generate a sentence about the topic being discussed.\n\n"
+                user_prompt_content += "Generate a realistic technical sentence about the topic being discussed. Use the conversation history to generate a sentence about the topic being discussed.\n\n"
             else:
                 user_prompt_content += "Generate a realistic technical sentence for this question in plain text.\n\n"
             
