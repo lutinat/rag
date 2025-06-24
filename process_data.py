@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import ProductionConfig
 from utils import save_chunks_jsonl, load_chunks_jsonl
 from data_processing.data_extraction.chunker import get_all_chunks
+from data_processing.data_extraction.web_scrapper import scrape_websites
 from retriever.retriever import build_faiss_index
 
 # Load environment variables and login
@@ -31,6 +32,7 @@ class DataProcessor:
     
     def __init__(self):
         self.config = ProductionConfig
+
         
     def process_documents(self, data_folder=None, force_reprocess=False):
         """Process documents and extract chunks."""
@@ -84,17 +86,25 @@ class DataProcessor:
         print(f"✅ Generated embeddings for {len(chunks)} chunks")
         return index, embeddings, chunks, embedder
     
-    def full_pipeline(self, data_folder=None, force_reprocess=False, force_regenerate_embeddings=False):
+    def full_pipeline(self, data_folder=None, process_scrape=True, process_documents=True, generate_embeddings=True):
         """Run complete processing pipeline."""
         print("🚀 Starting data processing...")
+
+        # Step 0: Scrape websites
+        if process_scrape:
+            print("\n🌐 Scraping Websites")
+            urls = ['https://www.satlantis.com', 'https://www.supersharp.space']
+            output_folder = self.config.RAW_DATA_FOLDER
+            num_files = scrape_websites(output_folder, urls)
+            print(f"✅ Scraped {num_files} files")
         
-        # Step 1: Process documents
+        # Step 1: Process documents and extract chunks
         print("\n📝 Processing Documents")
-        num_chunks = self.process_documents(data_folder, force_reprocess)
+        num_chunks = self.process_documents(data_folder, force_reprocess=process_documents)
         
         # Step 2: Generate embeddings
         print("\n🔢 Generating Embeddings")
-        index, embeddings, chunks, embedder = self.generate_embeddings(force_regenerate_embeddings)
+        index, embeddings, chunks, embedder = self.generate_embeddings(force_regenerate=generate_embeddings)
         
         print(f"\n✅ Pipeline completed!")
         print(f"📊 Processed {num_chunks} chunks, generated {len(chunks)} embeddings, found {num_chunks - len(chunks)} duplicates")
@@ -105,32 +115,22 @@ class DataProcessor:
 def main():
     parser = argparse.ArgumentParser(description="Process documents for RAG system")
     
-    parser.add_argument("--data-folder", help="Custom data folder path")
-    parser.add_argument("--force-documents", action="store_true", help="Force reprocess documents")
-    parser.add_argument("--force-embeddings", action="store_true", help="Force regenerate embeddings")
-    parser.add_argument("--documents-only", action="store_true", help="Only process documents")
-    parser.add_argument("--embeddings-only", action="store_true", help="Only generate embeddings")
+    parser.add_argument("--scrape", action="store_true", help="Scrape websites")
+    parser.add_argument("--chunks", action="store_true", help="Process documents into chunks (reprocess if exists)")
+    parser.add_argument("--embeddings", action="store_true", help="Generate embeddings (regenerate if exists)")
+    parser.add_argument("--all", action="store_true", help="Run all steps")
     
     args = parser.parse_args()
     processor = DataProcessor()
+
+    if args.all:
+        args.scrape = args.chunks = args.embeddings = True
     
+    if not any([args.scrape, args.chunks, args.embeddings]):
+        raise ValueError("No steps specified, run --help for available options")
+    raw_data_folder = processor.config.RAW_DATA_FOLDER
     try:
-        if args.documents_only:
-            print("📝 Processing documents only...")
-            num_chunks = processor.process_documents(args.data_folder, args.force_documents)
-            print(f"✅ Processed {num_chunks} chunks")
-            
-        elif args.embeddings_only:
-            print("🔢 Generating embeddings only...")
-            processor.generate_embeddings(args.force_embeddings)
-            print("✅ Embeddings generated")
-            
-        else:
-            processor.full_pipeline(
-                args.data_folder, 
-                args.force_documents, 
-                args.force_embeddings
-            )
+        processor.full_pipeline(process_scrape=args.scrape, process_documents=args.chunks, generate_embeddings=args.embeddings)
                 
     except Exception as e:
         print(f"❌ Error: {e}")
