@@ -24,7 +24,7 @@ class ProductionConfig:
     ]
     
     # File Paths
-    PROJECT_ROOT = "/home/elduayen/rag"
+    PROJECT_ROOT = "/mnt/DATA2/chatlantis/rag"
     CHUNK_PATH = f"{PROJECT_ROOT}/processed_data/all_chunks.jsonl"
     EMBEDDINGS_FOLDER = f"{PROJECT_ROOT}/embeddings"
     DATA_FOLDER = f"{PROJECT_ROOT}/data"

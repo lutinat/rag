@@ -1,11 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-from fpdf import FPDF
-import json
 import time
 import random
 import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
+from config import ProductionConfig
+
+PROJECT_ROOT = ProductionConfig.PROJECT_ROOT
 
 # List of common user-agents to rotate through
 USER_AGENTS = [
@@ -17,7 +20,7 @@ USER_AGENTS = [
 ]
 
 visited = set()
-scraped_data = []  # Changed from paragraphs to scraped_data to include metadata
+total_files_saved = 0
 
 def get_random_user_agent():
     return random.choice(USER_AGENTS)
@@ -25,7 +28,48 @@ def get_random_user_agent():
 def is_internal_link(base_url, link):
     return urlparse(link).netloc == urlparse(base_url).netloc
 
-def scrape(url, base_url):
+def save_page_to_file(url, paragraphs, title, base_output_path):
+    """Save a single page to a txt file immediately"""
+    global total_files_saved
+    
+    if not paragraphs:
+        return
+    
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(base_output_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create a safe filename from the URL
+    parsed_url = urlparse(url)
+    path = parsed_url.path.strip('/')
+    if not path:
+        path = 'home'
+    
+    # Replace problematic characters
+    safe_filename = path.replace('/', '_').replace('?', '_').replace('&', '_').replace('=', '_')
+    if len(safe_filename) > 150:  # Limit filename length
+        safe_filename = safe_filename[:150]
+    
+    # Add URL hash to filename for uniqueness
+    url_hash = str(hash(url))[-8:]
+    safe_filename = f"{safe_filename}_{url_hash}"
+    
+    # Create the full file path
+    file_path = os.path.join(output_dir, f"{safe_filename}.txt")
+    
+    # Write the page content to file
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(f'# URL: {url}\n')
+        f.write(f'# Title: {title or "No title"}\n\n')
+        
+        for paragraph in paragraphs:
+            text = paragraph['text'] if isinstance(paragraph, dict) else paragraph
+            f.write(text + '\n\n')
+    
+    print(f"Saved page to: {os.path.basename(file_path)}")
+    total_files_saved += 1
+
+def scrape(url, base_url, base_output_path):
     if url in visited:
         return
     visited.add(url)
@@ -36,7 +80,7 @@ def scrape(url, base_url):
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Extract and save paragraph texts with metadata
+        # Extract paragraph texts
         page_paragraphs = []
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
@@ -47,20 +91,15 @@ def scrape(url, base_url):
                     'title': soup.title.string if soup.title else None
                 })
         
-        # Add page data with metadata
+        # Save page immediately if it has content
         if page_paragraphs:
-            page_data = {
-                'url': url,
-                'paragraphs': page_paragraphs,
-                'title': soup.title.string if soup.title else None
-            }
-            scraped_data.append(page_data)
+            save_page_to_file(url, page_paragraphs, soup.title.string if soup.title else None, base_output_path)
 
         # Find and process all internal links
         for a_tag in soup.find_all('a', href=True):
             link = urljoin(url, a_tag['href'])
             if is_internal_link(base_url, link):
-                scrape(link, base_url)
+                scrape(link, base_url, base_output_path)
 
         # Pause between requests (random delay between 1 and 3 seconds)
         time.sleep(random.uniform(1, 3))
@@ -69,68 +108,15 @@ def scrape(url, base_url):
         print(f"Failed to retrieve {url}: {e}")
 
 
-def save_to_txt_with_urls(scraped_data, base_output_path):
-    """
-    Save scraped data to separate TXT files, one for each page.
-    Each file will contain only the paragraphs from that specific page.
-    """
-    # Create output directory if it doesn't exist
-    output_dir = os.path.dirname(base_output_path)
-    os.makedirs(output_dir, exist_ok=True)
-    
-    total_files = 0
-    
-    for page in scraped_data:
-        url = page['url']
-        paragraphs = page['paragraphs']
-        
-        if not paragraphs:
-            continue
-        
-        # Create a safe filename from the URL that includes the URL for easy extraction
-        parsed_url = urlparse(url)
-        
-        # Use the path part of the URL to create filename
-        path = parsed_url.path.strip('/')
-        if not path:
-            path = 'home'
-        
-        # Replace problematic characters
-        safe_filename = path.replace('/', '_').replace('?', '_').replace('&', '_').replace('=', '_')
-        if len(safe_filename) > 150:  # Limit filename length
-            safe_filename = safe_filename[:150]
-        
-        # Add URL hash to filename for uniqueness and easy URL extraction
-        url_hash = str(hash(url))[-8:]  # Last 8 characters of hash
-        safe_filename = f"{safe_filename}_{url_hash}"
-        
-        # Create the full file path
-        file_path = os.path.join(output_dir, f"{safe_filename}.txt")
-        
-        # Write the page content to its own file
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(f'# URL: {url}\n')
-            f.write(f'# Title: {page.get("title", "No title")}\n\n')
-            
-            for paragraph in paragraphs:
-                text = paragraph['text'] if isinstance(paragraph, dict) else paragraph
-                f.write(text + '\n\n')
-        
-        print(f"Saved page to: {os.path.basename(file_path)}")
-        total_files += 1
-    
-    print(f"Created {total_files} separate TXT files")
-    return total_files
-
-
 # Starting point
 base_url = 'https://www.satlantis.com'
-scrape(base_url, base_url)
+base_output_path = f'{PROJECT_ROOT}/data/{base_url.split("/")[-1]}'
 
-# Save scraped data to separate TXT files
-base_output_path = '/home/elduayen/rag/data/' + base_url.split('/')[-1]
-total_files = save_to_txt_with_urls(scraped_data, base_output_path)
+print(f"Starting web scraping of {base_url}")
+print(f"Files will be saved to: {base_output_path}")
 
-print(f"Total pages scraped: {len(scraped_data)}")
-print(f"Total paragraphs scraped: {sum(len(page['paragraphs']) for page in scraped_data)}")
-print(f"Total files created: {total_files}")
+scrape(base_url, base_url, base_output_path)
+
+print(f"Scraping completed!")
+print(f"Total pages visited: {len(visited)}")
+print(f"Total files saved: {total_files_saved}")
