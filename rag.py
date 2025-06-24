@@ -11,6 +11,7 @@ from retriever.rewriter import hyDE, rewrite
 from gpu_profiler import profile_function, profile_block, print_gpu_memory, print_function_summary, save_profile_report, reset_profiler, save_all_plots
 import torch
 from typing import Optional, Tuple, Any
+from config import ProductionConfig
 
 # Load the HF token from the .env file
 load_dotenv()
@@ -18,8 +19,8 @@ hf_token = os.getenv("HF_TOKEN")
 login(hf_token)
 
 # Paths
-chunk_path = "/home/elduayen/rag/processed_data/all_chunks.jsonl"
-embeddings_folder = "/home/elduayen/rag/embeddings"
+CHUNK_PATH = ProductionConfig.CHUNK_PATH
+EMBEDDINGS_FOLDER = ProductionConfig.EMBEDDINGS_FOLDER
 
 # Models
 phi4_model = "microsoft/Phi-4-mini-instruct"
@@ -32,7 +33,8 @@ def rag(question: str,
         quantization: str = None,
         # New parameters for production usage with preloaded models
         preloaded_models: Optional[dict] = None,
-        preloaded_embeddings: Optional[dict] = None) -> Tuple[str, list]:
+        preloaded_embeddings: Optional[dict] = None,
+        conversation_history: Optional[list] = None) -> Tuple[str, list]:
     """
     Process a question through the RAG pipeline and return an answer.
     
@@ -46,7 +48,7 @@ def rag(question: str,
                                          Expected keys: 'llm', 'embedder', 'reranker'
         preloaded_embeddings (dict, optional): Dictionary with preloaded embeddings data.
                                              Expected keys: 'index', 'embedder', 'chunks'
-        
+        conversation_history (list, optional): List of dictionaries with 'user' and 'assistant' keys.
     Returns:
         Tuple[str, list]: The generated answer and list of source dictionaries with URLs.
                          Each source dict contains: filename, url, title, source_type, display_name
@@ -54,7 +56,7 @@ def rag(question: str,
     print_gpu_memory("RAG Pipeline Start", enabled=enable_profiling)
     # Reset profiler for new run
     reset_profiler(enabled=enable_profiling)
-    
+    print("Conversation history : ", conversation_history)
     # Determine if we're using preloaded models (production mode) or loading fresh (CLI mode)
     production_mode = preloaded_models is not None
     
@@ -85,15 +87,18 @@ def rag(question: str,
 
         # Generate the hypothetical answer (HyDE) using the rewritten question
         with profile_block("HyDE_generation", enabled=enable_profiling):
-            hyde_answer = hyDE(rewritten_question, pipeline_obj=pipeline_obj, enable_profiling=enable_profiling)
+            hyde_answer = hyDE(rewritten_question, 
+                               pipeline_obj=pipeline_obj, 
+                               enable_profiling=enable_profiling, 
+                               conversation_history=conversation_history)
         print("HyDE : ", hyde_answer)
 
         # Extract and save chunks from the documents
         with profile_block("chunk_loading", enabled=enable_profiling):
             if recompute_embeddings:
-                chunks = get_all_chunks("/home/elduayen/rag/data", "/home/elduayen/rag/processed_data")
+                chunks = get_all_chunks(CHUNK_PATH, EMBEDDINGS_FOLDER)
             else:
-                chunks = load_chunks_jsonl(chunk_path)
+                chunks = load_chunks_jsonl(CHUNK_PATH)
 
         # Handle embeddings and indexing  
         with profile_block("embedding_and_indexing", enabled=enable_profiling):
@@ -108,7 +113,7 @@ def rag(question: str,
                 print("🔧 Using preloaded embedder, building FAISS index...")
                 index, embeddings, chunks, embedder = build_faiss_index(chunks,
                                                                         embedder_model,
-                                                                        embeddings_folder,
+                                                                        EMBEDDINGS_FOLDER,          
                                                                         save_embeddings=recompute_embeddings,
                                                                         enable_profiling=enable_profiling,
                                                                         pre_loaded_embedder=preloaded_models['embedder'])
@@ -116,14 +121,14 @@ def rag(question: str,
                 # Traditional mode: build everything from scratch
                 index, embeddings, chunks, embedder = build_faiss_index(chunks,
                                                                         embedder_model,
-                                                                        embeddings_folder,
+                                                                        EMBEDDINGS_FOLDER,
                                                                         save_embeddings=recompute_embeddings,
                                                                         enable_profiling=enable_profiling)
 
         if recompute_embeddings and not production_mode:
             # Save all chunks to a single JSONL file (only in CLI mode)
-            save_chunks_jsonl(chunks, chunk_path)
-            print(f"Saved all chunks to {chunk_path}")
+            save_chunks_jsonl(chunks, CHUNK_PATH)
+            print(f"Saved all chunks to {CHUNK_PATH}")
 
         # Retrieve the top-30 chunks
         with profile_block("context_retrieval", enabled=enable_profiling):
@@ -145,7 +150,10 @@ def rag(question: str,
         # Generate the prompt
         with profile_block("prompt_generation", enabled=enable_profiling):
             print("Generating prompt...")
-            prompt = build_prompt_from_chunks(rewritten_question, reranked_chunks, enable_profiling=enable_profiling)
+            prompt = build_prompt_from_chunks(rewritten_question, 
+                                              reranked_chunks, 
+                                              enable_profiling=enable_profiling,
+                                              conversation_history=conversation_history)
 
         # Generate the answer
         with profile_block("answer_generation", enabled=enable_profiling):

@@ -24,8 +24,10 @@ class ProductionConfig:
     ]
     
     # File Paths
-    CHUNK_PATH = "/home/elduayen/rag/processed_data/all_chunks.jsonl"
-    EMBEDDINGS_FOLDER = "/home/elduayen/rag/embeddings"
+    PROJECT_ROOT = "/home/elduayen/rag"
+    CHUNK_PATH = f"{PROJECT_ROOT}/processed_data/all_chunks.jsonl"
+    EMBEDDINGS_FOLDER = f"{PROJECT_ROOT}/embeddings"
+    DATA_FOLDER = f"{PROJECT_ROOT}/data"
     
     # Model Names
     MODELS = {

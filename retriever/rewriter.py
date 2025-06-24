@@ -8,6 +8,7 @@ import json
 from tqdm import tqdm
 import random
 import re
+from typing import Optional
 
 
 def rewrite(question: str, pipeline_obj=None, model_name: str = None, enable_profiling: bool = False, quantization: str = None) -> str:
@@ -178,7 +179,12 @@ def rewrite(question: str, pipeline_obj=None, model_name: str = None, enable_pro
     return _rewrite()
 
 
-def hyDE(question: str, pipeline_obj=None, model_name: str = None, enable_profiling: bool = False, quantization: str = None) -> str:
+def hyDE(question: str, 
+         pipeline_obj=None, 
+         model_name: str = None, 
+         enable_profiling: bool = False, 
+         quantization: str = None, 
+         conversation_history: Optional[list] = None) -> str:
     """
     Generate a hypothetical answer to the query to be used for retrieval.
     
@@ -206,34 +212,64 @@ def hyDE(question: str, pipeline_obj=None, model_name: str = None, enable_profil
                 raise ValueError("Invalid query provided.")
 
             generation_args = {
-                "max_new_tokens": 60,  # Limite réduite pour forcer une réponse concise
+                "max_new_tokens": 80,  # Increased for more complete technical sentences
                 "return_full_text": False,
-                #"temperature": 0.1,
-                # "do_sample": True,
-                # "top_p": 0.9,
+                "temperature": 0.3,  # Add some controlled creativity
+                "do_sample": True,
+                "top_p": 0.9,
             }
 
             # Define the system prompt
             system_prompt = {
                 "role": "system",
                 "content": (
-                    "You are an assistant generating internal documentation for Satlantis, a company in the space sector.\n"
-                    "Your task is to generate a **single, realistic, and plausible sentence** as if it were extracted from a confidential internal report.\n"
-                    "**Never** begin the sentence with phrases like 'The answer is', 'It is possible that', or any generic statement.\n"
-                    "**Do not explain** or provide context — only write the kind of sentence that could appear verbatim in a report.\n"
-                    "If the information is not publicly available, **make up a plausible answer** that sounds credible and grounded.\n"
-                    "**Never fabricate exaggerated names or achievements** — keep it neutral and fact-like.\n"
-                    "Use important words and vocabulary from the question in your answer to stay on topic.\n "
+                    "You are generating hypothetical technical documentation sentences for retrieval purposes.\n"
+                    "Your goal is to create plausible content that could exist in satellite/space technology documentation.\n"
+                    "\n"
+                    "CORE OBJECTIVE: Generate realistic hypothetical answers that help find relevant documents.\n"
+                    "\n"
+                    "GENERATION RULES:\n"
+                    "1. **Always provide a specific answer**: Never say 'not specified' or 'not available'\n"
+                    "2. **Use context clues**: If conversation mentions entities, incorporate them naturally\n"
+                    "3. **Stay domain-realistic**: Generate plausible satellite/space technology content.\n"
+                    "4. **Avoid unrealistic information**: Do not make up information that can bias the retrieval.\n"
+                    "5. **Use the conversation history**: If it exists, use it to generate a sentence about the topic being discussed.\n"
+                    "6. **Be specific**: Include concrete details like dates, specifications, capabilities\n"
+                    "7. **Use question vocabulary**: Include key terms from the question\n"
+                    "8. **Plain text only**: No HTML formatting\n"
+                    "\n"
+                    "CONTENT PATTERNS TO GENERATE:\n"
+                    "- Launch dates and mission timelines\n"
+                    "- Technical specifications and performance metrics\n"
+                    "- Instrument capabilities and features\n"
+                    "- Orbital parameters and operational details\n"
+                    "- Mission objectives and applications\n"
+                    "\n"
+                    "Generate confident, specific technical statements that sound like they come from real documentation.\n"
                 )
             }
 
+            # Build conversation history prompt if it exists
+            conversation_history_prompt = ""
+            if conversation_history:
+                for turn in conversation_history:
+                    conversation_history_prompt += f"User: {turn['user']}\nAssistant: {turn['assistant']}\n"
+
             # Construct the user prompt
+            user_prompt_content = ""
+            
+            # Only add conversation history section if it exists
+            if conversation_history_prompt:
+                user_prompt_content += f"### Previous conversation context:\n{conversation_history_prompt}\n"
+                user_prompt_content += "Generate a realistic technical sentence about the topic being discussed. Use the conversation history to generate a sentence about the topic being discussed.\n\n"
+            else:
+                user_prompt_content += "Generate a realistic technical sentence for this question in plain text.\n\n"
+            
+            user_prompt_content += f"Question: {question}\nTechnical documentation sentence:"
+            
             user_prompt = {
                 "role": "user",
-                "content": (
-                    f"Question: {question}\n"
-                    "Answer:"
-                )
+                "content": user_prompt_content
             }
             
             # Combine system and user prompts

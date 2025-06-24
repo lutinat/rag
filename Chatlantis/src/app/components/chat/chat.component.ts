@@ -24,6 +24,7 @@ interface Chat {
   id: number;
   title: string;
   messages: Message[];
+  chatId?: string; // Backend chat ID for conversation history
 }
 
 @Component({
@@ -69,7 +70,8 @@ export class ChatComponent {
     const newChat: Chat = {
       id: this.chatIdCounter++,
       title: 'New chat',
-      messages: []
+      messages: [],
+      chatId: this.apiService.generateChatId()
     };
     this.chats.unshift(newChat);
     this.selectedChatId = newChat.id;
@@ -120,8 +122,13 @@ export class ChatComponent {
       this.isWaitingForBot = true;
       this.inputValue = '';
 
-      this.apiService.getAnswer(userQuestion).subscribe(response => {
-        const sources = response.sources || [];
+      const chatId = this.selectedChat.chatId || this.apiService.generateChatId();
+      if (!this.selectedChat.chatId) {
+        this.selectedChat.chatId = chatId;
+      }
+      
+      this.apiService.getAnswer(userQuestion, chatId).subscribe(response => {
+        const sources = response.sources ? response.sources.map((source: string) => ({ name: source })) : [];
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
         this.selectedChat?.messages.push({
@@ -145,6 +152,27 @@ export class ChatComponent {
   }
 
   deleteChat(id: number): void {
+    const chatToDelete = this.chats.find(chat => chat.id === id);
+    if (!chatToDelete) return;
+
+    // Remove from frontend immediately for responsive UI
+    this.removeChatFromFrontend(id);
+
+    // If the chat has a backend chatId, delete it from the backend asynchronously
+    if (chatToDelete.chatId) {
+      this.apiService.clearChatHistory(chatToDelete.chatId).subscribe({
+        next: (response) => {
+          console.log('Chat deleted from backend:', response);
+        },
+        error: (error) => {
+          console.error('Error deleting chat from backend (chat already removed from UI):', error);
+          // Chat is already removed from frontend, so just log the error
+        }
+      });
+    }
+  }
+
+  private removeChatFromFrontend(id: number): void {
     const index = this.chats.findIndex(chat => chat.id === id);
     if (index !== -1) {
       this.chats.splice(index, 1);
@@ -153,7 +181,8 @@ export class ChatComponent {
           const newChat: Chat = {
             id: this.chatIdCounter++,
             title: 'New chat',
-            messages: []
+            messages: [],
+            chatId: this.apiService.generateChatId()
           };
           this.chats.push(newChat);
           this.selectedChatId = newChat.id;

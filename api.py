@@ -4,10 +4,11 @@ import logging
 import traceback
 from queue import Queue
 from threading import Thread, Lock
+import threading
 import time
 import gc
 import torch
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -281,7 +282,7 @@ class RAGProcessor:
             self.chunks = None
             return False
             
-    def process_question(self, question: str, quantization: str = None) -> Tuple[Dict[str, Any], int]:
+    def process_question(self, question: str, quantization: str = None, conversation_history: List[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], int]:
         """Process a question using the rag.py function with preloaded models."""
         if quantization is None:
             from config import ProductionConfig
@@ -319,7 +320,8 @@ class RAGProcessor:
                 enable_profiling=False,
                 quantization=quantization,
                 preloaded_models=preloaded_models if preloaded_models else None,
-                preloaded_embeddings=preloaded_embeddings if preloaded_embeddings else None
+                preloaded_embeddings=preloaded_embeddings if preloaded_embeddings else None,
+                conversation_history=conversation_history
             )
             
             return {
@@ -352,9 +354,151 @@ class RAGProcessor:
                 "error_type": "processing_error"
             }, 500
 
+@dataclass
+class ConversationTurn:
+    """Represents a single turn in a conversation."""
+    user_message: str
+    assistant_response: str
+    timestamp: float
+    sources: Optional[List[str]] = None
+
+@dataclass
+class ChatSession:
+    """Represents a chat session with metadata."""
+    chat_id: str
+    created_at: float
+    last_activity: float
+    turns: List[ConversationTurn]
+
+class ConversationManager:
+    """Manages conversation history per chat session."""
+    
+    def __init__(self, max_history_per_chat: int = 20, max_inactive_hours: int = 24):
+        self.chat_sessions: Dict[str, ChatSession] = {}
+        self.max_history = max_history_per_chat
+        self.max_inactive_hours = max_inactive_hours
+        self.conversation_lock = Lock()
+        logger.info(f"ConversationManager initialized with max_history={max_history_per_chat} per chat")
+    
+    def create_or_get_chat(self, chat_id: str) -> ChatSession:
+        """Create a new chat session or get existing one."""
+        # This method should only be called when the lock is already held
+        if chat_id not in self.chat_sessions:
+            chat_session = ChatSession(
+                chat_id=chat_id,
+                created_at=time.time(),
+                last_activity=time.time(),
+                turns=[]
+            )
+            self.chat_sessions[chat_id] = chat_session
+            logger.info(f"Created new chat session {chat_id}")
+        else:
+            self.chat_sessions[chat_id].last_activity = time.time()
+        
+        return self.chat_sessions[chat_id]
+    
+    def add_turn(self, chat_id: str, user_message: str, assistant_response: str, sources: List[str] = None):
+        """Add a conversation turn to a specific chat session."""
+        try:
+            # Use timeout to prevent blocking
+            if self.conversation_lock.acquire(timeout=2.0):
+                try:
+                    chat_session = self.create_or_get_chat(chat_id)
+                    
+                    turn = ConversationTurn(
+                        user_message=user_message,
+                        assistant_response=assistant_response,
+                        timestamp=time.time(),
+                        sources=sources or []
+                    )
+                    
+                    chat_session.turns.append(turn)
+                    chat_session.last_activity = time.time()
+                    
+                    # Keep only recent history
+                    if len(chat_session.turns) > self.max_history:
+                        chat_session.turns = chat_session.turns[-self.max_history:]
+                    
+                    logger.info(f"Added conversation turn to chat {chat_id}. Total turns: {len(chat_session.turns)}")
+                finally:
+                    self.conversation_lock.release()
+            else:
+                logger.warning(f"Timeout acquiring lock for adding turn to chat {chat_id}")
+        except Exception as e:
+            logger.error(f"Error adding conversation turn to {chat_id}: {str(e)}")
+    
+    def get_history(self, chat_id: str, max_turns: int = 10) -> List[Dict[str, str]]:
+        """Get conversation history for a specific chat session."""
+        with self.conversation_lock:
+            if chat_id not in self.chat_sessions:
+                return []
+            
+            chat_session = self.chat_sessions[chat_id]
+            recent_turns = chat_session.turns[-max_turns:] if max_turns > 0 else chat_session.turns
+            history = [
+                {
+                    "user": turn.user_message,
+                    "assistant": turn.assistant_response
+                }
+                for turn in recent_turns
+            ]
+            
+            logger.info(f"Retrieved {len(history)} conversation turns for chat {chat_id}")
+            return history
+    
+    def clear_chat(self, chat_id: str):
+        """Clear conversation history for a specific chat session."""
+        with self.conversation_lock:
+            if chat_id in self.chat_sessions:
+                del self.chat_sessions[chat_id]
+                logger.info(f"Cleared chat session {chat_id}")
+    
+    def _clear_chat_unsafe(self, chat_id: str):
+        """Clear conversation history without acquiring lock (for internal use)."""
+        if chat_id in self.chat_sessions:
+            del self.chat_sessions[chat_id]
+            logger.info(f"Cleared chat session {chat_id}")
+    
+    def get_all_chats(self) -> List[str]:
+        """Get list of all active chat IDs."""
+        with self.conversation_lock:
+            return list(self.chat_sessions.keys())
+    
+    def cleanup_inactive_chats(self):
+        """Remove chats that have been inactive for too long."""
+        current_time = time.time()
+        max_inactive_seconds = self.max_inactive_hours * 3600
+        
+        with self.conversation_lock:
+            inactive_chats = []
+            for chat_id, chat_session in self.chat_sessions.items():
+                if current_time - chat_session.last_activity > max_inactive_seconds:
+                    inactive_chats.append(chat_id)
+            
+            # Remove inactive chats without calling clear_chat to avoid deadlock
+            for chat_id in inactive_chats:
+                self._clear_chat_unsafe(chat_id)
+            
+            return len(inactive_chats)
+    
+    def get_chat_info(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Get information about a specific chat session."""
+        with self.conversation_lock:
+            if chat_id not in self.chat_sessions:
+                return None
+            
+            chat_session = self.chat_sessions[chat_id]
+            return {
+                "chat_id": chat_session.chat_id,
+                "created_at": chat_session.created_at,
+                "last_activity": chat_session.last_activity,
+                "total_turns": len(chat_session.turns)
+            }
+
 # Global variables
 model_manager = None
 rag_processor = None
+conversation_manager = None
 request_queue = Queue()
 worker_lock = Lock()
 
@@ -367,9 +511,31 @@ def worker():
             if request_data is None:
                 break
                 
-            question, quantization, response_queue = request_data
-            result, status_code = rag_processor.process_question(question, quantization)
+            question, chat_id, quantization, conversation_history, response_queue = request_data
+            
+            # Process the question
+            result, status_code = rag_processor.process_question(question, 
+                                                                 quantization, 
+                                                                 conversation_history=conversation_history
+                                                                 )
+            
+            # Send response first, then add to conversation history
             response_queue.put((result, status_code))
+            
+            # If successful, add to conversation history for this chat (async but non-blocking)
+            if status_code == 200 and conversation_manager:
+                def add_conversation_turn():
+                    try:
+                        answer = result.get('answer', '')
+                        sources = result.get('sources', [])
+                        conversation_manager.add_turn(chat_id, question, answer, sources)
+                        logger.info(f"Added conversation turn to chat {chat_id}")
+                    except Exception as e:
+                        logger.error(f"Error adding conversation turn: {str(e)}")
+                
+                # Use a daemon thread for non-blocking conversation storage
+                thread = threading.Thread(target=add_conversation_turn, daemon=True)
+                thread.start()
             
         except Exception as e:
             logger.error(f"Error in worker: {str(e)}")
@@ -393,13 +559,33 @@ def question():
         if not question:
             return jsonify({'error': 'No question provided'}), 400
         
+        # Get chat_id and quantization from request
+        chat_id = data.get('chat_id')
         quantization = data.get('quantization', None)
+        
+        # chat_id is required for proper conversation tracking
+        if not chat_id:
+            return jsonify({'error': 'chat_id is required for conversation tracking'}), 400
+        
+        # ✅ Récupérer l'historique stocké pour ce chat_id
+        if conversation_manager:
+            conversation_history = conversation_manager.get_history(chat_id, max_turns=10)
+        else:
+            conversation_history = []
+        
+        logger.info(f"Processing question for chat {chat_id} with {len(conversation_history)} stored turns")
             
         response_queue = Queue()
-        request_queue.put((question, quantization, response_queue))
+        request_queue.put((question, chat_id, quantization, conversation_history, response_queue))
         
         try:
             result, status_code = response_queue.get(timeout=ProductionConfig.REQUEST_TIMEOUT)
+            
+            # Add conversation context info to the response
+            if status_code == 200:
+                result['chat_id'] = chat_id
+                result['conversation_history_used'] = len(conversation_history)
+                
             return jsonify(result), status_code
         except Exception as e:
             return jsonify({'error': f'Request processing failed: {str(e)}'}), 504
@@ -469,6 +655,97 @@ def emergency_cleanup():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/chat/history', methods=['GET'])
+def get_chat_history():
+    """Get conversation history for a specific chat."""
+    try:
+        chat_id = request.args.get('chat_id')
+        max_turns = int(request.args.get('max_turns', 10))
+        
+        if not chat_id:
+            return jsonify({'error': 'chat_id is required'}), 400
+        
+        if not conversation_manager:
+            return jsonify({'error': 'Conversation manager not initialized'}), 500
+        
+        history = conversation_manager.get_history(chat_id, max_turns)
+        chat_info = conversation_manager.get_chat_info(chat_id)
+        
+        return jsonify({
+            'chat_id': chat_id,
+            'history': history,
+            'total_turns': len(history),
+            'chat_info': chat_info
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting chat history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/clear', methods=['POST'])
+def clear_chat():
+    """Clear conversation history for a specific chat."""
+    try:
+        data = request.json or {}
+        chat_id = data.get('chat_id')
+        
+        if not chat_id:
+            return jsonify({'error': 'chat_id is required'}), 400
+        
+        if not conversation_manager:
+            return jsonify({'error': 'Conversation manager not initialized'}), 500
+        
+        conversation_manager.clear_chat(chat_id)
+        return jsonify({
+            'message': f'Chat history cleared for chat {chat_id}',
+            'chat_id': chat_id
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error clearing chat history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chats/all', methods=['GET'])
+def get_all_chats():
+    """Get list of all active chat sessions."""
+    try:
+        if not conversation_manager:
+            return jsonify({'error': 'Conversation manager not initialized'}), 500
+        
+        all_chat_ids = conversation_manager.get_all_chats()
+        all_chats_info = []
+        
+        for chat_id in all_chat_ids:
+            chat_info = conversation_manager.get_chat_info(chat_id)
+            if chat_info:
+                all_chats_info.append(chat_info)
+        
+        return jsonify({
+            'chats': all_chats_info,
+            'total_chats': len(all_chats_info)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting all chats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chats/cleanup', methods=['POST'])
+def cleanup_inactive_chats():
+    """Cleanup inactive chat sessions."""
+    try:
+        if not conversation_manager:
+            return jsonify({'error': 'Conversation manager not initialized'}), 500
+        
+        cleaned_count = conversation_manager.cleanup_inactive_chats()
+        return jsonify({
+            'message': f'Cleaned up {cleaned_count} inactive chats',
+            'cleaned_chats': cleaned_count
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error cleaning up chats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 def cleanup_models():
     """Cleanup preloaded models before shutdown/reload."""
     global model_manager, rag_processor
@@ -502,10 +779,14 @@ def shutdown_workers():
 
 def initialize_app():
     """Initialize the application with model preloading."""
-    global model_manager, rag_processor
+    global model_manager, rag_processor, conversation_manager
     
     try:
         from config import ProductionConfig
+        
+        # Initialize conversation manager for chat sessions
+        conversation_manager = ConversationManager(max_history_per_chat=20, max_inactive_hours=24)
+        logger.info("Conversation manager initialized for chat sessions")
         
         model_manager = ModelManager(max_memory_gb=ProductionConfig.MAX_GPU_MEMORY_GB)
         
@@ -525,6 +806,7 @@ def initialize_app():
         worker_thread = Thread(target=worker, daemon=True)
         worker_thread.start()
         
+        logger.info("Application initialized successfully with conversation history support")
         return True
         
     except Exception as e:
