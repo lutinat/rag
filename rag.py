@@ -50,7 +50,8 @@ def rag(question: str,
                                              Expected keys: 'index', 'embedder', 'chunks'
         conversation_history (list, optional): List of dictionaries with 'user' and 'assistant' keys.
     Returns:
-        Tuple[str, list]: The generated answer and list of source filenames
+        Tuple[str, list]: The generated answer and list of source dictionaries with URLs.
+                         Each source dict contains: filename, url, title, source_type, display_name
     """
     print_gpu_memory("RAG Pipeline Start", enabled=enable_profiling)
     # Reset profiler for new run
@@ -167,8 +168,36 @@ def rag(question: str,
         print("\nSources:")
         sources = []
         for chunk in reranked_chunks:
-            sources.append(chunk['metadata']['filename'])
-            print(f"- {chunk['metadata']['filename']}")
+            metadata = chunk.get('metadata', {})
+            
+            # Get filename and clean it if it's from web scraping
+            filename = metadata.get('filename', '')
+            source_type = metadata.get('source_type', 'unknown')
+            
+            # Remove .txt extension for web scraped files
+            if source_type == 'web_scraped' and filename.endswith('.txt'):
+                clean_filename = filename[:-4]  # Remove .txt
+            else:
+                clean_filename = filename
+            
+            # Create source info with URL if available
+            source_info = {
+                'filename': clean_filename,
+                'url': metadata.get('url', ''),
+                'title': metadata.get('title', ''),
+                'source_type': source_type
+            }
+            
+            # Add display name based on available info
+            if source_info['url']:
+                source_info['display_name'] = source_info['title'] if source_info['title'] else source_info['url']
+            else:
+                source_info['display_name'] = source_info['filename']
+            
+            sources.append(source_info)
+            print(f"- {source_info['display_name']}")
+            if source_info['url']:
+                print(f"  URL: {source_info['url']}")
         
         print_gpu_memory("RAG Pipeline End", enabled=enable_profiling)
         print_function_summary(enabled=enable_profiling)

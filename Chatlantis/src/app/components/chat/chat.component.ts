@@ -7,7 +7,11 @@ import { EditChatModalComponent } from '../edit-chat-modal/edit-chat-modal.compo
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 interface Source {
-  name: string;
+  filename: string;
+  url?: string;
+  title?: string;
+  source_type: string;
+  display_name: string;
 }
 
 interface Message {

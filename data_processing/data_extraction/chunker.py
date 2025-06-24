@@ -375,7 +375,31 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     for txt_path in tqdm(txt_paths):
         # print(f"Processing {txt_path}")
         text = load_txt_web(txt_path)
-        metadata = {'filename': os.path.basename(txt_path)}
+        
+        # Extract URL and title from the header if present
+        url = None
+        title = None
+        lines = text.split('\n')
+        for line in lines[:10]:  # Check first 10 lines for header
+            line = line.strip()
+            if line.startswith('# URL:'):
+                url = line.replace('# URL:', '').strip()
+            elif line.startswith('# Title:'):
+                title = line.replace('# Title:', '').strip()
+        
+        # Create metadata based on file content
+        metadata = {
+            'filename': os.path.basename(txt_path),
+            'source_type': 'web_scraped' if url else 'text'
+        }
+        
+        # Add URL and title to metadata if found
+        if url:
+            metadata['url'] = url
+        if title:
+            metadata['title'] = title
+        
+        # Use the standard extract_chunks function
         chunks = extract_chunks(text, source_name=txt_path, metadata=metadata)
         all_chunks.extend(chunks)
 
@@ -395,6 +419,6 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
 
 if __name__ == "__main__":
     
-    folder_path = "/home/lucasd/code/rag/data/"
-    chunk_folder_path = "/home/lucasd/code/rag/processed_data/"
+    folder_path = "/home/elduayen/rag/data/"
+    chunk_folder_path = "/home/elduayen/rag/processed_data/"
     get_all_chunks(folder_path, chunk_folder_path)
