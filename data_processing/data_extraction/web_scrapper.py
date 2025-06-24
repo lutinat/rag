@@ -5,6 +5,7 @@ from fpdf import FPDF
 import json
 import time
 import random
+import os
 
 # List of common user-agents to rotate through
 USER_AGENTS = [
@@ -68,25 +69,68 @@ def scrape(url, base_url):
         print(f"Failed to retrieve {url}: {e}")
 
 
-def save_to_txt_with_urls(scraped_data, file_path):
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for page in scraped_data:
-            url = page['url']
-            for paragraph in page['paragraphs']:
-                # paragraph est un dict, on prend le texte
+def save_to_txt_with_urls(scraped_data, base_output_path):
+    """
+    Save scraped data to separate TXT files, one for each page.
+    Each file will contain only the paragraphs from that specific page.
+    """
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(base_output_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    total_files = 0
+    
+    for page in scraped_data:
+        url = page['url']
+        paragraphs = page['paragraphs']
+        
+        if not paragraphs:
+            continue
+        
+        # Create a safe filename from the URL that includes the URL for easy extraction
+        parsed_url = urlparse(url)
+        
+        # Use the path part of the URL to create filename
+        path = parsed_url.path.strip('/')
+        if not path:
+            path = 'home'
+        
+        # Replace problematic characters
+        safe_filename = path.replace('/', '_').replace('?', '_').replace('&', '_').replace('=', '_')
+        if len(safe_filename) > 150:  # Limit filename length
+            safe_filename = safe_filename[:150]
+        
+        # Add URL hash to filename for uniqueness and easy URL extraction
+        url_hash = str(hash(url))[-8:]  # Last 8 characters of hash
+        safe_filename = f"{safe_filename}_{url_hash}"
+        
+        # Create the full file path
+        file_path = os.path.join(output_dir, f"{safe_filename}.txt")
+        
+        # Write the page content to its own file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(f'# URL: {url}\n')
+            f.write(f'# Title: {page.get("title", "No title")}\n\n')
+            
+            for paragraph in paragraphs:
                 text = paragraph['text'] if isinstance(paragraph, dict) else paragraph
-                f.write(f'# URL: {url}\n')
                 f.write(text + '\n\n')
-    print(f"Saved TXT with URLs to {file_path}")
+        
+        print(f"Saved page to: {os.path.basename(file_path)}")
+        total_files += 1
+    
+    print(f"Created {total_files} separate TXT files")
+    return total_files
 
 
 # Starting point
 base_url = 'https://www.satlantis.com'
 scrape(base_url, base_url)
 
-# Save scraped data to TXT (with URLs)
-output_txt_path = '/home/elduayen/rag/data/' + base_url.split('/')[-1] + '.txt'
-save_to_txt_with_urls(scraped_data, output_txt_path)
+# Save scraped data to separate TXT files
+base_output_path = '/home/elduayen/rag/data/' + base_url.split('/')[-1]
+total_files = save_to_txt_with_urls(scraped_data, base_output_path)
 
 print(f"Total pages scraped: {len(scraped_data)}")
 print(f"Total paragraphs scraped: {sum(len(page['paragraphs']) for page in scraped_data)}")
+print(f"Total files created: {total_files}")
