@@ -8,7 +8,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
 from config import ProductionConfig
 
-PROJECT_ROOT = ProductionConfig.PROJECT_ROOT
+RAW_DATA_FOLDER = ProductionConfig.RAW_DATA_FOLDER
 
 # List of common user-agents to rotate through
 USER_AGENTS = [
@@ -110,7 +110,7 @@ def scrape(url, base_url, base_output_path):
 
 # Starting point
 base_url = 'https://www.satlantis.com'
-base_output_path = f'{PROJECT_ROOT}/data/{base_url.split("/")[-1]}'
+base_output_path = f'{RAW_DATA_FOLDER}/{base_url.split("/")[-1]}'
 
 print(f"Starting web scraping of {base_url}")
 print(f"Files will be saved to: {base_output_path}")
