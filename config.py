@@ -25,9 +25,10 @@ class ProductionConfig:
     
     # File Paths
     PROJECT_ROOT = "/mnt/DATA2/chatlantis/rag"
-    CHUNK_PATH = f"{PROJECT_ROOT}/processed_data/all_chunks.jsonl"
-    EMBEDDINGS_FOLDER = f"{PROJECT_ROOT}/embeddings"
-    DATA_FOLDER = f"{PROJECT_ROOT}/data"
+    EMBEDDINGS_FOLDER = f"{PROJECT_ROOT}/data/embeddings"
+    RAW_DATA_FOLDER = f"{PROJECT_ROOT}/data/raw"
+    PROCESSED_DATA_FOLDER = f"{PROJECT_ROOT}/data/processed"
+    CHUNK_PATH = f"{PROCESSED_DATA_FOLDER}/all_chunks.jsonl"
     
     # Model Names
     MODELS = {

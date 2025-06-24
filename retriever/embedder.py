@@ -49,11 +49,11 @@ def find_close_chunks_faiss(embeddings: np.ndarray, chunks: list[dict], similari
 
             if score >= similarity_threshold:
                 to_delete.add(j_idx)  # Remove the duplicate chunk
-                print("--------------------------------")
-                print(f"Chunk {i} is close to chunk {j_idx} with similarity {score}")
-                print(f"Chunk {i}: {chunks[i]}")
-                print(f"Chunk {j_idx}: {chunks[j_idx]}")
-                print("--------------------------------")
+                # print("--------------------------------")
+                # print(f"Chunk {i} is close to chunk {j_idx} with similarity {score}")
+                # print(f"Chunk {i}: {chunks[i]}")
+                # print(f"Chunk {j_idx}: {chunks[j_idx]}")
+                # print("--------------------------------")
 
     return to_delete
 

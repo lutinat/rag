@@ -28,7 +28,6 @@ embedder_model = "intfloat/multilingual-e5-large-instruct"
 reranker_model = 'BAAI/bge-reranker-v2-m3'
 
 def rag(question: str, 
-        recompute_embeddings: bool = False, 
         enable_profiling: bool = False, 
         quantization: str = None,
         # New parameters for production usage with preloaded models
@@ -40,7 +39,6 @@ def rag(question: str,
     
     Args:
         question (str): The question to answer
-        recompute_embeddings (bool): Whether to recompute embeddings
         enable_profiling (bool): Whether to enable GPU memory profiling
         quantization (str, optional): Type of quantization to apply to the model.
                                      Options: "4bit", "8bit", None (default: None)
@@ -93,12 +91,11 @@ def rag(question: str,
                                conversation_history=conversation_history)
         print("HyDE : ", hyde_answer)
 
-        # Extract and save chunks from the documents
+        # Load chunks from the processed data
         with profile_block("chunk_loading", enabled=enable_profiling):
-            if recompute_embeddings:
-                chunks = get_all_chunks(CHUNK_PATH, EMBEDDINGS_FOLDER)
-            else:
-                chunks = load_chunks_jsonl(CHUNK_PATH)
+            if not os.path.exists(CHUNK_PATH):
+                raise FileNotFoundError(f"No chunks found at {CHUNK_PATH}. Please run 'python process_data.py' first to process documents.")
+            chunks = load_chunks_jsonl(CHUNK_PATH)
 
         # Handle embeddings and indexing  
         with profile_block("embedding_and_indexing", enabled=enable_profiling):
@@ -122,13 +119,8 @@ def rag(question: str,
                 index, embeddings, chunks, embedder = build_faiss_index(chunks,
                                                                         embedder_model,
                                                                         EMBEDDINGS_FOLDER,
-                                                                        save_embeddings=recompute_embeddings,
+                                                                        save_embeddings=False,  # Embeddings are managed by process_data.py
                                                                         enable_profiling=enable_profiling)
-
-        if recompute_embeddings and not production_mode:
-            # Save all chunks to a single JSONL file (only in CLI mode)
-            save_chunks_jsonl(chunks, CHUNK_PATH)
-            print(f"Saved all chunks to {CHUNK_PATH}")
 
         # Retrieve the top-30 chunks
         with profile_block("context_retrieval", enabled=enable_profiling):
@@ -216,14 +208,12 @@ def rag(question: str,
 if __name__ == "__main__":
     # Parse the arguments
     if len(sys.argv) < 2:
-        print("Usage: python rag.py <question> [-s] [-p] [-q <quantization>]")
-        print("  -s: Recompute embeddings")
+        print("Usage: python rag.py <question> [-p] [-q <quantization>]")
         print("  -p: Enable GPU profiling and save report")
         print("  -q <quantization>: Use quantization (4bit, 8bit)")
+        print("  Note: To process documents, run 'python process_data.py' first")
         sys.exit(1)
     question = sys.argv[1]
-    # Check if the flag for saving embeddings (-s) is provided
-    recompute_embeddings = '-s' in sys.argv[2:]
     enable_profiling = '-p' in sys.argv[2:]
     
     # Check for quantization flag
@@ -241,7 +231,7 @@ if __name__ == "__main__":
     
     print_gpu_memory("Initial State", enabled=enable_profiling)
     
-    answer, sources = rag(question, recompute_embeddings, enable_profiling, quantization)
+    answer, sources = rag(question, enable_profiling, quantization)
     
     # Save profiling report and plots if requested
     if enable_profiling:
