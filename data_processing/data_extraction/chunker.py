@@ -380,12 +380,21 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         url = None
         title = None
         lines = text.split('\n')
-        for line in lines[:10]:  # Check first 10 lines for header
+        lines_to_remove = []
+        
+        for i, line in enumerate(lines[:10]):  # Check first 10 lines for header
             line = line.strip()
-            if line.startswith('# URL:'):
-                url = line.replace('# URL:', '').strip()
-            elif line.startswith('# Title:'):
-                title = line.replace('# Title:', '').strip()
+            if line.startswith('# URL:') or line.startswith('URL:'):
+                url = line.replace('# URL:', '').replace('URL:', '').strip()
+                lines_to_remove.append(i)
+            elif line.startswith('# Title:') or line.startswith('Title:'):
+                title = line.replace('# Title:', '').replace('Title:', '').strip()
+                lines_to_remove.append(i)
+        
+        # Remove the URL and Title lines from the text
+        if lines_to_remove:
+            filtered_lines = [line for i, line in enumerate(lines) if i not in lines_to_remove]
+            text = '\n'.join(filtered_lines).strip()
         
         # Create metadata based on file content
         metadata = {
