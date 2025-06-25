@@ -94,8 +94,7 @@ class DataProcessor:
         if process_scrape:
             print("\n🌐 Scraping Websites")
             urls = ['https://www.satlantis.com', 'https://www.supersharp.space']
-            output_folder = self.config.RAW_DATA_FOLDER
-            num_files = scrape_websites(output_folder, urls)
+            num_files = scrape_websites(data_folder, urls)
             print(f"✅ Scraped {num_files} files")
         
         # Step 1: Process documents and extract chunks
@@ -130,7 +129,11 @@ def main():
         raise ValueError("No steps specified, run --help for available options")
     raw_data_folder = processor.config.RAW_DATA_FOLDER
     try:
-        processor.full_pipeline(process_scrape=args.scrape, process_documents=args.chunks, generate_embeddings=args.embeddings)
+        processor.full_pipeline(data_folder=raw_data_folder, 
+                                process_scrape=args.scrape,
+                                process_documents=args.chunks, 
+                                generate_embeddings=args.embeddings
+                                )
                 
     except Exception as e:
         print(f"❌ Error: {e}")

@@ -316,7 +316,6 @@ class RAGProcessor:
             # Call the rag function
             answer, sources = rag(
                 question=question,
-                recompute_embeddings=False,
                 enable_profiling=False,
                 quantization=quantization,
                 preloaded_models=preloaded_models if preloaded_models else None,

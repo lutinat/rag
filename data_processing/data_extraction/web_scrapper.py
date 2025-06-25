@@ -59,6 +59,9 @@ def save_page_to_file(url, paragraphs, title, base_output_path):
     
     # Create the full file path
     file_path = os.path.join(output_dir, f"{safe_filename}.txt")
+
+    if os.path.exists(file_path):
+        print(f"File already exists: {file_path}")
     
     # Write the page content to file
     with open(file_path, 'w', encoding='utf-8') as f:
