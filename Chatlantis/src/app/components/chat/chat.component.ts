@@ -25,6 +25,7 @@ interface Chat {
   title: string;
   messages: Message[];
   chatId?: string; // Backend chat ID for conversation history
+  isWaitingForBot?: boolean; // Track loading state per chat
 }
 
 @Component({
@@ -47,10 +48,9 @@ export class ChatComponent {
   inputValue: string = '';
   isSidebarOpen: boolean = false;
   hasStartedChat: boolean = false;
-  isWaitingForBot: boolean = false;
 
   chats: Chat[] = [
-    { id: 1, title: 'New chat', messages: [] }
+    { id: 1, title: 'New chat', messages: [], isWaitingForBot: false }
   ];
   selectedChatId: number = 1;
   chatIdCounter: number = 2;
@@ -59,11 +59,22 @@ export class ChatComponent {
   editingChat: ChatSidebarItem | null = null;
 
   get selectedChat(): Chat | undefined {
-    return this.chats.find(chat => chat.id === this.selectedChatId);
+    const chat = this.chats.find(chat => chat.id === this.selectedChatId);
+    // Ensure isWaitingForBot is initialized for existing chats
+    if (chat && chat.isWaitingForBot === undefined) {
+      chat.isWaitingForBot = false;
+    }
+    return chat;
   }
 
   get messages(): Message[] {
     return this.selectedChat?.messages ?? [];
+  }
+
+  get isCurrentChatWaiting(): boolean {
+    const waiting = this.selectedChat?.isWaitingForBot === true;
+    console.log('Template checking isCurrentChatWaiting:', waiting, 'selectedChat:', this.selectedChat?.id, 'isWaitingForBot:', this.selectedChat?.isWaitingForBot);
+    return waiting;
   }
 
   onNewChat() {
@@ -71,7 +82,8 @@ export class ChatComponent {
       id: this.chatIdCounter++,
       title: 'New chat',
       messages: [],
-      chatId: this.apiService.generateChatId()
+      chatId: this.apiService.generateChatId(),
+      isWaitingForBot: false
     };
     this.chats.unshift(newChat);
     this.selectedChatId = newChat.id;
@@ -108,37 +120,42 @@ export class ChatComponent {
   }
 
   onArrowClick(): void {
-    if (this.inputValue && !this.isWaitingForBot && this.selectedChat) {
+    if (this.inputValue && !this.selectedChat?.isWaitingForBot && this.selectedChat) {
       const userQuestion = this.inputValue;
+      const targetChat = this.selectedChat; // Capture reference to ensure response goes to correct chat
+      
       this.hasStartedChat = true;
-      this.selectedChat.messages.push({
+      targetChat.messages.push({
         content: this.sanitizeHtml(userQuestion),
         isUser: true
       });
-      if (this.selectedChat.messages.length === 1) {
-        this.selectedChat.title = userQuestion.slice(0, 30) + (userQuestion.length > 30 ? '...' : '');
+      if (targetChat.messages.length === 1) {
+        targetChat.title = userQuestion.slice(0, 30) + (userQuestion.length > 30 ? '...' : '');
       }
       this.scrollToBottom();
-      this.isWaitingForBot = true;
+      targetChat.isWaitingForBot = true;
       this.inputValue = '';
 
-      const chatId = this.selectedChat.chatId || this.apiService.generateChatId();
-      if (!this.selectedChat.chatId) {
-        this.selectedChat.chatId = chatId;
+      const chatId = targetChat.chatId || this.apiService.generateChatId();
+      if (!targetChat.chatId) {
+        targetChat.chatId = chatId;
       }
       
       this.apiService.getAnswer(userQuestion, chatId).subscribe(response => {
         const sources = response.sources || [];
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
-        this.selectedChat?.messages.push({
+        targetChat.messages.push({
           content: this.sanitizeHtml(response.answer),
           isUser: false,
           sources: sources
         });
-        this.scrollToBottom();
-        this.isWaitingForBot = false;
-        setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+        targetChat.isWaitingForBot = false;
+        // Only scroll to bottom if this is still the selected chat
+        if (targetChat.id === this.selectedChatId) {
+          this.scrollToBottom();
+          setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+        }
       });
     }
   }
@@ -182,7 +199,8 @@ export class ChatComponent {
             id: this.chatIdCounter++,
             title: 'New chat',
             messages: [],
-            chatId: this.apiService.generateChatId()
+            chatId: this.apiService.generateChatId(),
+            isWaitingForBot: false
           };
           this.chats.push(newChat);
           this.selectedChatId = newChat.id;
