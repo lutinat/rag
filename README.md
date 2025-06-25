@@ -1,22 +1,67 @@
-# RAG
-This repository contains code for a Retrieval-Augmented Generation (RAG) model for generating answers to questions based on a given context.
+# RAG (Retrieval-Augmented Generation)
+Document-based search and answer generation system for Satlantis.
 
-## How to use
-1. Install the required packages by running: `pip install -r requirements.txt`
-2. To generate an answer, run: `python rag.py "What is the capital of France?"`. Use the -s flag to recompute all chunks and embeddings, and save them: `python rag.py "Your question here" -s` 
+## Configuration and Installation
 
+### 1. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Configuration 
+Modify settings in `config.py`:
+- Data paths (`RAW_DATA_FOLDER`, `PROCESSED_DATA_FOLDER`) 
+- RAG settings like top_k chunks, quantization...
+
+### 3. Hugging Face Token
+Create a `.env` file with your token:
+```
+HF_TOKEN=your_hugging_face_token
+```
+
+## Usage
+
+### Data preparation (required at start)
+```bash
+# Download websites AND create embeddings (first time)
+python process_data.py --all
+
+# Or separately:
+python process_data.py --scrape     # Downloads Satlantis websites as .txt
+python process_data.py --chunks     # Splits documents into chunks
+python process_data.py --embeddings # Computes embeddings (vectorization)
+```
+
+### Web Interface (recommended)
+1. **Start Angular frontend:**
+   ```bash
+   cd Chatlantis
+   ng serve
+   ```
+
+2. **Start API backend:**
+   ```bash
+   python deploy_production.py
+   ```
+
+### Terminal only
+```bash
+python rag.py "Your question here"
+```
 
 ## How it works
-The model combines retrieval and generation steps. It first retrieves a set of relevant documents from a corpus based on the question. Then, it generates an answer using the retrieved content.
 
-## Pipeline
-The diagram below illustrates the current pipeline implementation:
-
-![RAG pipeline](doc/pipeline.png)
+1. **Scraping**: Downloads content from Satlantis websites
+2. **Chunking**: Splits documents into chunks
+3. **Embeddings**: Converts chunks into numerical vectors
+4. **Search**: Finds the most relevant chunks for your question
+5. **Generation**: Generates answer based on found documents
 
 ## Models used
-- HyDE : microsoft/Phi-4-mini-instruct
-- Embedder: intfloat/multilingual-e5-large-instruct
-- Retrieval : FAISS
-- Reranker : BAAI/bge-reranker-v2-m3
-- Generator: microsoft/Phi-4-mini-instruct
+- **HyDE & Generation**: microsoft/Phi-4-mini-instruct
+- **Embeddings**: intfloat/multilingual-e5-large-instruct  
+- **Search**: FAISS
+- **Reranking**: BAAI/bge-reranker-v2-m3
+
+## Architecture
+![RAG pipeline](doc/pipeline.png)
