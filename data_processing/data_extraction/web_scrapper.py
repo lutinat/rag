@@ -32,6 +32,36 @@ def normalize_url(url):
     # Reconstruct URL without fragment
     return f"{parsed.scheme}://{parsed.netloc}{parsed.path}{('?' + parsed.query) if parsed.query else ''}"
 
+def should_skip_url(url):
+    """Check if URL should be skipped based on file extension"""
+    # Extensions to skip
+    skip_extensions = {
+        # Documents
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf',
+        # Images
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico',
+        # Videos
+        '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v',
+        # Audio
+        '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac',
+        # Archives
+        '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+        # Executables
+        '.exe', '.msi', '.dmg', '.deb', '.rpm',
+        # Other files
+        '.xml', '.json', '.csv', '.log'
+    }
+    
+    parsed_url = urlparse(url.lower())
+    path = parsed_url.path
+    
+    # Check if the path ends with any of the skip extensions
+    for ext in skip_extensions:
+        if path.endswith(ext):
+            return True
+    
+    return False
+
 def is_internal_link(base_url, link):
     return urlparse(link).netloc == urlparse(base_url).netloc
 
@@ -84,6 +114,12 @@ def scrape(url, base_url, base_output_path):
     visited.add(normalized_url)
     print(f"Scraping: {url}")
 
+    # Pause before making the request (except for the very first request)
+    if len(visited) > 1:
+        delay = random.uniform(1, 3)
+        print(f"Pausing for {delay:.1f} seconds...")
+        time.sleep(delay)
+
     try:
         headers = {'User-Agent': get_random_user_agent()}
         # Use the original URL for the actual request (fragments are ignored by servers anyway)
@@ -108,11 +144,10 @@ def scrape(url, base_url, base_output_path):
         # Find and process all internal links
         for a_tag in soup.find_all('a', href=True):
             link = urljoin(url, a_tag['href'])
-            if is_internal_link(base_url, link):
+            if is_internal_link(base_url, link) and not should_skip_url(link):
                 scrape(link, base_url, base_output_path)
-
-        # Pause between requests (random delay between 1 and 3 seconds)
-        time.sleep(random.uniform(1, 3))
+            elif should_skip_url(link):
+                print(f"Skipping file URL: {link}")
 
     except requests.RequestException as e:
         print(f"Failed to retrieve {url}: {e}")
