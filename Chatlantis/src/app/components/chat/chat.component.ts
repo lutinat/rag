@@ -128,7 +128,7 @@ export class ChatComponent {
       }
       
       this.apiService.getAnswer(userQuestion, chatId).subscribe(response => {
-        const sources = response.sources ? response.sources.map((source: string) => ({ name: source })) : [];
+        const sources = response.sources || [];
         console.log('Sources:', sources);
         console.log('Response:', response.answer);
         this.selectedChat?.messages.push({
