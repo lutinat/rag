@@ -270,54 +270,67 @@ def get_metadata_plumberpdf(pdf_path: str) -> Dict:
 
 
 if __name__ == "__main__":
-    from msal import ConfidentialClientApplication
-    import requests
+    from office365.sharepoint.client_context import ClientContext
+    from office365.runtime.auth.user_credential import UserCredential
 
-    client_id = ""
-    tenant_id = ""
-    client_secret = ""
-    authority = ""
-    scopes = ""
+    base_url = "https://satlantis.sharepoint.com"
 
-    app = ConfidentialClientApplication(client_id=client_id, authority=authority, client_credential=client_secret)
+    # SharePoint site URL
+    sharepoint_sites = ["/sites/ImgProcss", "/sites/intranet", "/sites/SATLANTISFrance"]
 
-  # Acquire token using client credentials flow (no need for user interaction)
-    result = app.acquire_token_for_client(scopes=scopes)
+    # Document library names for each site
+    document_libraries = {
+        "/sites/ImgProcss": "Documents",
+        "/sites/intranet": "Documentos%20compartidos", 
+        "/sites/SATLANTISFrance": "Documents"
+    }
 
-    if "access_token" in result:
-        # Successfully obtained access token, now you can make requests
-        headers = {
-            "Authorization": f"Bearer {result['access_token']}"
-        }
-        
-        # Make API call to get files from your SharePoint folder
-        site_url = "https://satlantis.sharepoint.com/sites/ImgProcss"
-        api = f"{site_url}/_api/web/GetFolderByServerRelativeUrl('Documents')/Files"
+    sharepoint_site = sharepoint_sites[0]
+    site_url = base_url + sharepoint_site
 
-        resp = requests.get(api, headers=headers)
-        if resp.ok:
-            files = resp.json()["value"]
-            for file in files:
-                print(file["Name"])
-        else:
-            print("Error:", resp.status_code, resp.text)
-    else:
-        print("Failed to acquire token:", result.get("error_description"))
+    # Your credentials
+    username = ""
+    password = ""
 
-    # Print PDF files only
-    for file in files:
-        if file.properties["Name"].lower().endswith(".pdf"):
-            print(file.properties["Name"])
+    ctx = ClientContext(site_url).with_credentials(UserCredential(username, password))
 
+    def list_pdfs_recursively(folder_relative_url):
+        folder = ctx.web.get_folder_by_server_relative_url(folder_relative_url)
+        ctx.load(folder)
+        ctx.execute_query()
+
+        # Lister les fichiers dans le dossier
+        files = folder.files
+        ctx.load(files)
+        ctx.execute_query()
+        for file in files:
+            if file.properties["Name"].lower().endswith(".pdf"):
+                # Get the file's server relative URL
+                file_relative_url = file.properties["ServerRelativeUrl"]
+                # Construct the full download URL
+                file_download_url = f"{base_url}{file_relative_url}"
+                
+                # Construct SharePoint viewer URL (opens in SharePoint's PDF viewer)
+                file_viewer_url = f"{base_url}{sharepoint_site}/_layouts/15/WopiFrame.aspx?sourcedoc={file_relative_url}&action=default"
+                
+                print(f"PDF: {file.properties['Name']}")
+                print(f"Direct Link: {file_download_url}")
+                print(f"SharePoint Viewer: {file_viewer_url}")
+                print(f"Page 5 Link (PDF viewer): {file_download_url}#page=5")
+                print(f"Page 10 Link (PDF viewer): {file_download_url}#page=10")
+                print(f"Path: {folder_relative_url}/{file.properties['Name']}")
+                print("---")
+
+        # Lister les sous-dossiers
+        folders = folder.folders
+        ctx.load(folders)
+        ctx.execute_query()
+        for subfolder in folders:
+            subfolder_url = subfolder.properties["ServerRelativeUrl"]
+            list_pdfs_recursively(subfolder_url)
+
+    # Get the appropriate document library for the selected site
+    document_library = document_libraries.get(sharepoint_site, "Documents")
     
-    # s = 0
-    # for pdf_file in pdf_files:
-    #     print(pdf_file)
-    #     title = get_title_from_pdf(pdf_file)
-    #     print(f"\n\nTitle: {title}")
-    #     if not title:
-    #         s += 1
-
-    #     metadata = get_metadata_plumberpdf(pdf_file)
-    #     print(f"Metadata: {metadata}")
-    # print(f"Number of files with no title: {s}")
+    # Démarrer la recherche à la racine de la bibliothèque Documents
+    list_pdfs_recursively(sharepoint_site + "/" + document_library)
