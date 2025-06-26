@@ -223,27 +223,20 @@ def hyDE(question: str,
             system_prompt = {
                 "role": "system",
                 "content": (
-                    "You are generating hypothetical technical documentation sentences for retrieval purposes.\n"
+                    "You are generating hypothetical technical documentation plain text sentences for retrieval purposes.\n"
                     "Your goal is to create plausible content that could exist in satellite/space technology documentation.\n"
                     "\n"
                     "CORE OBJECTIVE: Generate realistic hypothetical answers that help find relevant documents.\n"
                     "\n"
                     "GENERATION RULES:\n"
-                    "1. **Always provide a specific answer**: Never say 'not specified' or 'not available'\n"
-                    "2. **Use context clues**: If conversation mentions entities, incorporate them naturally\n"
-                    "3. **Stay domain-realistic**: Generate plausible satellite/space technology content.\n"
-                    "4. **Avoid unrealistic information**: Do not make up information that can bias the retrieval.\n"
-                    "5. **Use the conversation history**: If it exists, use it to generate a sentence about the topic being discussed.\n"
-                    "6. **Be specific**: Include concrete details like dates, specifications, capabilities\n"
-                    "7. **Use question vocabulary**: Include key terms from the question\n"
-                    "8. **Plain text only**: No HTML formatting\n"
-                    "\n"
-                    "CONTENT PATTERNS TO GENERATE:\n"
-                    "- Launch dates and mission timelines\n"
-                    "- Technical specifications and performance metrics\n"
-                    "- Instrument capabilities and features\n"
-                    "- Orbital parameters and operational details\n"
-                    "- Mission objectives and applications\n"
+                    "1. Always provide a specific answer: Never say 'not specified' or 'not available'\n"
+                    "2. Use context clues: If conversation mentions entities, incorporate them naturally\n"
+                    "3. Stay domain-realistic: Generate plausible satellite/space technology content.\n"
+                    "4. Avoid unrealistic information: Do not make up information that can bias the retrieval.\n"
+                    "5. Use the conversation history: If it exists, use it to generate a sentence about the topic being discussed.\n"
+                    "6. Be specific: Include concrete details like dates, specifications, capabilities\n"
+                    "7. Use question vocabulary: Include key terms from the question\n"
+                    "8. Plain text only: Not any special formatting, just plain text\n"
                     "\n"
                     "Generate confident, specific technical statements that sound like they come from real documentation.\n"
                 )
@@ -265,7 +258,7 @@ def hyDE(question: str,
             else:
                 user_prompt_content += "Generate a realistic technical sentence for this question in plain text.\n\n"
             
-            user_prompt_content += f"Question: {question}\nTechnical documentation sentence:"
+            user_prompt_content += f"Question: {question}\nDocumentation sentence in plain text:"
             
             user_prompt = {
                 "role": "user",

@@ -125,6 +125,7 @@ def build_prompt_from_chunks(question: str,
             f"All {len(source_blocks)} Sources (independent sources):\n"
             "You are provided with independent source snippets from internal Satlantis documents.\n"
             "Each source includes metadata and content. Use only the given information to answer.\n\n"
+            "You can also use the conversation history to understand the context of the question and answer the question accordingly.\n\n"
             "Format explanation:\n"
             "- Each source is numbered (Source X)\n"
             "- Metadata: section contains document properties (file name, page, section, etc.)\n"

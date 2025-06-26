@@ -111,7 +111,6 @@ def rag(question: str,
                 index, embeddings, chunks, embedder = build_faiss_index(chunks,
                                                                         embedder_model,
                                                                         EMBEDDINGS_FOLDER,          
-                                                                        save_embeddings=recompute_embeddings,
                                                                         enable_profiling=enable_profiling,
                                                                         pre_loaded_embedder=preloaded_models['embedder'])
             else:
@@ -119,7 +118,6 @@ def rag(question: str,
                 index, embeddings, chunks, embedder = build_faiss_index(chunks,
                                                                         embedder_model,
                                                                         EMBEDDINGS_FOLDER,
-                                                                        save_embeddings=False,  # Embeddings are managed by process_data.py
                                                                         enable_profiling=enable_profiling)
 
         # Retrieve the top-30 chunks
@@ -130,14 +128,16 @@ def rag(question: str,
         # Rerank to get the top-4 chunks
         with profile_block("reranking", enabled=enable_profiling):
             print("Reranking...")
+            # Combine HyDE context and original question for better reranking
+            rerank_query = f"Hypothetical Answer: {hyde_answer}\n\nQuery: {rewritten_question}"
             if production_mode and 'reranker' in preloaded_models:
                 # Use preloaded reranker
-                reranked_chunks = reranker(reranker_model, rewritten_question, top_chunks, k=4, 
+                reranked_chunks = reranker(reranker_model, rerank_query, top_chunks, k=4, 
                                          enable_profiling=enable_profiling, 
                                          pre_loaded_reranker=preloaded_models['reranker'])
             else:
                 # Traditional reranking
-                reranked_chunks = reranker(reranker_model, rewritten_question, top_chunks, k=4, enable_profiling=enable_profiling)
+                reranked_chunks = reranker(reranker_model, rerank_query, top_chunks, k=4, enable_profiling=enable_profiling)
 
         # Generate the prompt
         with profile_block("prompt_generation", enabled=enable_profiling):
