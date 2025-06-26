@@ -35,7 +35,7 @@ def build_prompt_from_chunks(question: str,
                 "2. If the sources are insufficient, explicitly state what information is missing and why it's needed.\n"
                 "3. When discussing technical specifications or measurements, always cite the exact values from the sources.\n"
                 "4. If multiple sources provide conflicting information, acknowledge the discrepancy and explain the different perspectives.\n"
-                "5. You must provide details why you answer the question, and why you chose the sources you did.\n"
+                "5. You must provide details why you answer the question, and why you chose the sources you used.\n"
                 "6. You must discuss about your answer in a few words, and provide limitations and uncertainties.\n"
                 "7. For satellite-specific questions, ensure you only use information from the relevant satellite's documentation.\n\n"
                 "8. You are provided with a conversation history if it exists. Use it to understand the context of the question and answer the question accordingly.\n"
