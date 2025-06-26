@@ -116,19 +116,19 @@ def build_prompt_from_chunks(question: str,
             meta = chunk.get("metadata", {})
             meta_lines = "\n".join(f"  - {key.capitalize()}: {value}" for key, value in meta.items() if value)
             formatted_block = (
-                f"### Source {i+1}\n"
-                f"**Metadata:**\n{meta_lines if meta else '  - None'}\n"
-                f"**Content:**\n{chunk['text']}"
+                f"Source {i+1}\n"
+                f"Metadata:\n{meta_lines if meta else '  - None'}\n"
+                f"Content:\n{chunk['text']}"
             )
             source_blocks.append(formatted_block)
         context_prompt = (
-            f"### All {len(source_blocks)} Sources (independent sources):\n"
+            f"All {len(source_blocks)} Sources (independent sources):\n"
             "You are provided with independent source snippets from internal Satlantis documents.\n"
-            "Each source includes metadata and content. Use **only** the given information to answer.\n\n"
-            "**Format explanation:**\n"
-            "- Each source is numbered (### Source X)\n"
-            "- **Metadata:** section contains document properties (file name, page, section, etc.)\n"
-            "- **Content:** section contains the actual text from the document\n"
+            "Each source includes metadata and content. Use only the given information to answer.\n\n"
+            "Format explanation:\n"
+            "- Each source is numbered (Source X)\n"
+            "- Metadata: section contains document properties (file name, page, section, etc.)\n"
+            "- Content: section contains the actual text from the document\n"
             "- Sources are separated by '---' dividers\n"
             "- All sources are independent - analyze each separately\n\n"
             f"{'---'.join(source_blocks)}\n\n"
