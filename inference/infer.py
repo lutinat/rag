@@ -143,7 +143,7 @@ def build_prompt_from_chunks(question: str,
 
         # Add question as user message     
         user_message = (
-            "Using the sources provided, answer the following question concisely using HTML formatting, and using the same language as the question:\n"
+            "Using the sources provided, directly answer the following question concisely using HTML formatting, and using the same language as the question:\n"
         )
         user_prompt = {
             "role": "user",

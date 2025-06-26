@@ -210,11 +210,11 @@ def hyDE(question: str,
         try:
             if not question or not isinstance(question, str):
                 raise ValueError("Invalid query provided.")
-
+            
             generation_args = {
                 "max_new_tokens": 80,  # Increased for more complete technical sentences
                 "return_full_text": False,
-                "temperature": 0.3,  # Add some controlled creativity
+                "temperature": 0.02,  # Low temperature to avoid hallucinations
                 "do_sample": True,
                 "top_p": 0.9,
             }
@@ -223,30 +223,63 @@ def hyDE(question: str,
             system_prompt = {
                 "role": "system",
                 "content": (
-                    "You are generating hypothetical technical documentation plain text sentences for retrieval purposes.\n"
-                    "Your goal is to create plausible content that could exist in satellite/space technology documentation.\n"
+                    "You are helping with document retrieval by converting questions into complete hypothetical answers using the EXACT same terms from the query.\n"
                     "\n"
-                    "CORE OBJECTIVE: Generate realistic hypothetical answers that help find relevant documents.\n"
+                    "STRICT RULES:\n"
+                    "1. Keep ALL original terms unchanged (satellite names, technical terms, etc.)\n"
+                    "2. Preserve the SPECIFIC attribute/property being asked about in the query\n"
+                    "3. Pay attention to question words (when, where, how, why, what) and preserve that focus\n"
+                    "4. Convert questions into natural hypothetical answer format about the EXACT same aspect\n"
+                    "6. You MUST complete the sentence - do not stop mid-sentence\n"
+                    "7. Write naturally and descriptively, not overly concise\n"
+                    "8. Use generic, plausible technical language that sounds realistic\n"
+                    "9. Create full, natural sentences that would appear in technical documentation\n"
+                    "10. Do NOT use specific numbers, dates, or detailed specifications\n"
+                    "11. Do NOT substitute or change the original query terms\n"
+                    "12. Use conversation history context when available to improve context understanding\n"
+                    "13. Create complete, grammatically correct hypothetical answers\n"
                     "\n"
-                    "GENERATION RULES:\n"
-                    "1. Always provide a specific answer: Never say 'not specified' or 'not available'\n"
-                    "2. Use context clues: If conversation mentions entities, incorporate them naturally\n"
-                    "3. Stay domain-realistic: Generate plausible satellite/space technology content.\n"
-                    "4. Avoid unrealistic information: Do not make up information that can bias the retrieval.\n"
-                    "5. Use the conversation history: If it exists, use it to generate a sentence about the topic being discussed.\n"
-                    "6. Be specific: Include concrete details like dates, specifications, capabilities\n"
-                    "7. Use question vocabulary: Include key terms from the question\n"
-                    "8. Plain text only: Not any special formatting, just plain text\n"
-                    "\n"
-                    "Generate confident, specific technical statements that sound like they come from real documentation.\n"
+                    "GOAL: Complete hypothetical answer generation that helps document retrieval while preserving all original query terms.\n"
                 )
             }
 
             # Build conversation history prompt if it exists
             conversation_history_prompt = ""
             if conversation_history:
+                def clean_html_tags(text: str, replace_with_space: bool = True) -> str:
+                    """Remove only known HTML formatting tags, preserve other angle bracket content."""
+                    # Known HTML tags that the system generates (from inference/infer.py) and frontend supports
+                    html_tags = [
+                        # Basic formatting
+                        'b', 'strong', 'i', 'em', 
+                        # Structure
+                        'p', 'br', 'h3', 'h1', 'h2', 'h4', 'h5', 'h6',
+                        # Lists  
+                        'ul', 'ol', 'li',
+                        # Other potential tags
+                        'span', 'div', 'code', 'pre'
+                    ]
+                    replacement = ' ' if replace_with_space else ''
+                    
+                    # Optimize: compile a single regex pattern for all tags
+                    tag_pattern = '|'.join(html_tags)
+                    # Remove opening tags (with or without attributes)
+                    text = re.sub(f'<({tag_pattern})([^>]*)>', replacement, text, flags=re.IGNORECASE)
+                    # Remove closing tags
+                    text = re.sub(f'</({tag_pattern})>', replacement, text, flags=re.IGNORECASE)
+                    
+                    # Clean up multiple spaces if we used space replacement
+                    if replace_with_space:
+                        text = re.sub(r'\s+', ' ', text).strip()
+                    
+                    return text
+                
                 for turn in conversation_history:
-                    conversation_history_prompt += f"User: {turn['user']}\nAssistant: {turn['assistant']}\n"
+                    # User input should be clean (remove any HTML completely)
+                    user_text = clean_html_tags(turn['user'], replace_with_space=False)
+                    # Assistant responses replace HTML tags with spaces to preserve word boundaries
+                    assistant_text = clean_html_tags(turn['assistant'], replace_with_space=True)
+                    conversation_history_prompt += f"User: {user_text}\nAssistant: {assistant_text}\n"
 
             # Construct the user prompt
             user_prompt_content = ""
@@ -254,11 +287,11 @@ def hyDE(question: str,
             # Only add conversation history section if it exists
             if conversation_history_prompt:
                 user_prompt_content += f"### Previous conversation context:\n{conversation_history_prompt}\n"
-                user_prompt_content += "Generate a realistic technical sentence about the topic being discussed. Use the conversation history to generate a sentence about the topic being discussed.\n\n"
+                user_prompt_content += "Using the context to understand what the question refers to, generate an answer to the following question:\n"
             else:
-                user_prompt_content += "Generate a realistic technical sentence for this question in plain text.\n\n"
+                user_prompt_content += "Generate an answer to the following question:\n"
             
-            user_prompt_content += f"Question: {question}\nDocumentation sentence in plain text:"
+            user_prompt_content += f"Question: {question}\nAnswer in plain text:"
             
             user_prompt = {
                 "role": "user",
