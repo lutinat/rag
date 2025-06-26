@@ -38,6 +38,7 @@ class ProductionConfig:
     }
     
     # Processing Settings
+    MAX_HISTORY_TURNS = 10
     DEFAULT_QUANTIZATION = "4bit"
     RETRIEVAL_K = 30
     RERANK_K = 4

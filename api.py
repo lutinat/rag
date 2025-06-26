@@ -372,7 +372,7 @@ class ChatSession:
 class ConversationManager:
     """Manages conversation history per chat session."""
     
-    def __init__(self, max_history_per_chat: int = 20, max_inactive_hours: int = 24):
+    def __init__(self, max_history_per_chat: int = ProductionConfig.MAX_HISTORY_TURNS, max_inactive_hours: int = 24):
         self.chat_sessions: Dict[str, ChatSession] = {}
         self.max_history = max_history_per_chat
         self.max_inactive_hours = max_inactive_hours
@@ -426,7 +426,7 @@ class ConversationManager:
         except Exception as e:
             logger.error(f"Error adding conversation turn to {chat_id}: {str(e)}")
     
-    def get_history(self, chat_id: str, max_turns: int = 10) -> List[Dict[str, str]]:
+    def get_history(self, chat_id: str, max_turns: int = ProductionConfig.MAX_HISTORY_TURNS) -> List[Dict[str, str]]:
         """Get conversation history for a specific chat session."""
         with self.conversation_lock:
             if chat_id not in self.chat_sessions:
@@ -568,7 +568,7 @@ def question():
         
         # ✅ Récupérer l'historique stocké pour ce chat_id
         if conversation_manager:
-            conversation_history = conversation_manager.get_history(chat_id, max_turns=10)
+            conversation_history = conversation_manager.get_history(chat_id, max_turns=ProductionConfig.MAX_HISTORY_TURNS)
         else:
             conversation_history = []
         
@@ -659,7 +659,7 @@ def get_chat_history():
     """Get conversation history for a specific chat."""
     try:
         chat_id = request.args.get('chat_id')
-        max_turns = int(request.args.get('max_turns', 10))
+        max_turns = int(request.args.get('max_turns', ProductionConfig.MAX_HISTORY_TURNS))
         
         if not chat_id:
             return jsonify({'error': 'chat_id is required'}), 400
@@ -784,7 +784,7 @@ def initialize_app():
         from config import ProductionConfig
         
         # Initialize conversation manager for chat sessions
-        conversation_manager = ConversationManager(max_history_per_chat=20, max_inactive_hours=24)
+        conversation_manager = ConversationManager(max_history_per_chat=ProductionConfig.MAX_HISTORY_TURNS, max_inactive_hours=24)
         logger.info("Conversation manager initialized for chat sessions")
         
         model_manager = ModelManager(max_memory_gb=ProductionConfig.MAX_GPU_MEMORY_GB)
