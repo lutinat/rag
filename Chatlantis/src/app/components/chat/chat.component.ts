@@ -55,6 +55,7 @@ export class ChatComponent {
   hasStartedChat: boolean = false;
   isApiOnline: boolean = true;
   showHelpModal: boolean = false;
+  animationKey: number = 0; // Used to retrigger animations
 
   chats: Chat[] = [
     { id: 1, title: 'New chat', messages: [], isWaitingForBot: false }
@@ -121,9 +122,25 @@ export class ChatComponent {
   onNewChat() {
     // Just navigate to welcome page, don't create a new chat yet
     this.inputValue = '';
+    const wasAlreadyOnWelcome = !this.hasStartedChat;
     this.hasStartedChat = false;
     // Clear the selected chat so no chat appears highlighted in sidebar
     this.selectedChatId = -1; // Use -1 to indicate no selection
+    
+    // If already on welcome page, retrigger animations
+    if (wasAlreadyOnWelcome) {
+      this.retriggerAnimations();
+    }
+  }
+
+  private retriggerAnimations() {
+    // Temporarily disable animations to reset them
+    this.animationKey++;
+    
+    // Use setTimeout to ensure DOM updates before re-enabling animations
+    setTimeout(() => {
+      this.animationKey++;
+    }, 50);
   }
 
   onSelectChat(id: number) {
