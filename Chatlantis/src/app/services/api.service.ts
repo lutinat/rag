@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface ConversationTurn {
     user: string;
@@ -25,9 +26,14 @@ export interface ChatInfo {
     providedIn: 'root'
 })
 export class ApiService {
-    private apiUrl = 'http://10.3.18.2:5000/api';
+    private apiUrl: string;
 
-    constructor(private http: HttpClient) {}
+    constructor(private http: HttpClient) {
+        // Dynamically set API URL based on current host and environment config
+        const currentHost = window.location.hostname;
+        this.apiUrl = `http://${currentHost}:${environment.apiPort}/api`;
+        console.log(`API service initialized with URL: ${this.apiUrl}`);
+    }
 
     getAnswer(question: string, chatId: string, conversationHistory?: ConversationTurn[]): Observable<any> {
         const requestBody: QuestionRequest = {
@@ -63,5 +69,15 @@ export class ApiService {
     // Utility method to generate a unique chat ID
     generateChatId(): string {
         return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // Utility method to get current API URL
+    getCurrentApiUrl(): string {
+        return this.apiUrl;
+    }
+
+    // Utility method to check API health
+    checkApiHealth(): Observable<any> {
+        return this.http.get(`${this.apiUrl}/health`);
     }
 }

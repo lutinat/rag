@@ -43,7 +43,10 @@ export class ChatComponent {
   constructor(
     private apiService: ApiService,
     private sanitizer: DomSanitizer
-  ) {}
+  ) {
+    // Log the API URL being used for debugging
+    console.log('Chat component initialized with API URL:', this.apiService.getCurrentApiUrl());
+  }
 
   inputValue: string = '';
   isSidebarOpen: boolean = false;
@@ -141,20 +144,36 @@ export class ChatComponent {
         targetChat.chatId = chatId;
       }
       
-      this.apiService.getAnswer(userQuestion, chatId).subscribe(response => {
-        const sources = response.sources || [];
-        console.log('Sources:', sources);
-        console.log('Response:', response.answer);
-        targetChat.messages.push({
-          content: this.sanitizeHtml(response.answer),
-          isUser: false,
-          sources: sources
-        });
-        targetChat.isWaitingForBot = false;
-        // Only scroll to bottom if this is still the selected chat
-        if (targetChat.id === this.selectedChatId) {
-          this.scrollToBottom();
-          setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+      this.apiService.getAnswer(userQuestion, chatId).subscribe({
+        next: (response) => {
+          const sources = response.sources || [];
+          console.log('Sources:', sources);
+          console.log('Response:', response.answer);
+          targetChat.messages.push({
+            content: this.sanitizeHtml(response.answer),
+            isUser: false,
+            sources: sources
+          });
+          targetChat.isWaitingForBot = false;
+          // Only scroll to bottom if this is still the selected chat
+          if (targetChat.id === this.selectedChatId) {
+            this.scrollToBottom();
+            setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+          }
+        },
+        error: (error) => {
+          console.error('Error getting answer from API:', error);
+          console.error('API URL used:', this.apiService.getCurrentApiUrl());
+          targetChat.messages.push({
+            content: this.sanitizeHtml(`Error: Unable to get response from the API server. Please check if the server is running on ${this.apiService.getCurrentApiUrl()}`),
+            isUser: false,
+            sources: []
+          });
+          targetChat.isWaitingForBot = false;
+          if (targetChat.id === this.selectedChatId) {
+            this.scrollToBottom();
+            setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+          }
         }
       });
     }
