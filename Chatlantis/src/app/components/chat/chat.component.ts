@@ -119,17 +119,11 @@ export class ChatComponent {
   }
 
   onNewChat() {
-    const newChat: Chat = {
-      id: this.chatIdCounter++,
-      title: 'New chat',
-      messages: [],
-      chatId: this.apiService.generateChatId(),
-      isWaitingForBot: false
-    };
-    this.chats.unshift(newChat);
-    this.selectedChatId = newChat.id;
+    // Just navigate to welcome page, don't create a new chat yet
     this.inputValue = '';
     this.hasStartedChat = false;
+    // Clear the selected chat so no chat appears highlighted in sidebar
+    this.selectedChatId = -1; // Use -1 to indicate no selection
   }
 
   onSelectChat(id: number) {
@@ -163,9 +157,42 @@ export class ChatComponent {
 
 
   onArrowClick(): void {
-    if (this.inputValue && !this.selectedChat?.isWaitingForBot && this.selectedChat) {
+    if (this.inputValue) {
       const userQuestion = this.inputValue;
+      
+      // If we're on the welcome page (hasStartedChat = false), handle chat creation/selection
+      if (!this.hasStartedChat) {
+        // Check if we have an empty "New chat" to reuse
+        const emptyChat = this.chats.find(chat => 
+          chat.title === 'New chat' && chat.messages.length === 0
+        );
+        
+        if (emptyChat) {
+          // Reuse the existing empty chat
+          this.selectedChatId = emptyChat.id;
+          if (!emptyChat.chatId) {
+            emptyChat.chatId = this.apiService.generateChatId();
+          }
+        } else {
+          // Create a new chat only if no empty "New chat" exists
+          const newChat: Chat = {
+            id: this.chatIdCounter++,
+            title: 'New chat',
+            messages: [],
+            chatId: this.apiService.generateChatId(),
+            isWaitingForBot: false
+          };
+          this.chats.unshift(newChat);
+          this.selectedChatId = newChat.id;
+        }
+      }
+      
       const targetChat = this.selectedChat; // Capture reference to ensure response goes to correct chat
+      
+      // Check if we have a valid chat and it's not waiting for a response
+      if (!targetChat || targetChat.isWaitingForBot) {
+        return;
+      }
       
       this.hasStartedChat = true;
       targetChat.messages.push({
