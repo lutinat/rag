@@ -265,7 +265,7 @@ export class ChatComponent {
           // Update API status to offline if error occurs
           this.isApiOnline = false;
           targetChat.messages.push({
-            content: this.sanitizeHtml('Sorry, the API is currently offline. Please check your connection and try again later.'),
+            content: this.sanitizeHtml('Sorry, the API is currently offline. Please try again later.'),
             isUser: false,
             sources: []
           });
