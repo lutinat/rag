@@ -25,6 +25,11 @@ import nltk
 from nltk.corpus import stopwords
 nltk.download('stopwords')
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from config import ProductionConfig
+
 
 structured_keywords = {
     "optic": [
@@ -340,8 +345,6 @@ def extract_keywords_with_similarity(clustered_chunks, allowed_keywords, sample_
 
 
 
-
-
 def cluster_text(embeddings, questions, eps=0.5, min_cluster_size=5, min_samples=5):
     """
     Cluster the text based on their similarity.
@@ -386,8 +389,8 @@ def get_umap_embeddings(embeddings, output_dim=2):
 
 if __name__ == "__main__":
 
-    input_jsonl = "/home/lucasd/code/rag/processed_data/all_chunks.jsonl"
-    embeddings_path = "/home/lucasd/code/rag/embeddings/embeddings.npy"
+    input_jsonl = ProductionConfig.CHUNK_PATH
+    embeddings_path = f"{ProductionConfig.EMBEDDINGS_FOLDER}/embeddings.npy"
     save_path = "/home/lucasd/code/rag/data_processing/data_analysis/"
 
     # Load the generated questions
@@ -487,7 +490,7 @@ if __name__ == "__main__":
                 va='center',  # Vertical alignment (centered)
                 bbox=dict(facecolor='black', alpha=0.7, boxstyle='round,pad=0.5')  # Background color with padding
             )
-
+    
     # Legend and layout
     plt.tight_layout()
     plt.savefig(save_path + "umap_projection_clusters.png")
