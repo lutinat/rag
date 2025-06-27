@@ -17,30 +17,96 @@
         [ngClass]="{'-translate-x-full': !isSidebarOpen, 'translate-x-0': isSidebarOpen}"
     ></app-sidebar>
 
-    <div class="flex flex-col w-full h-full text-satlantis-blue">
-        <div *ngIf="!hasStartedChat" class="flex flex-col justify-center items-center gap-4 h-full">
-            <h1 class="text-4xl font-bold">Welcome to Chatlantis</h1>
-            <div class="text-center max-w-2xl">
-                <p class="text-base">Your expert assistant for all Satlantis-specific questions. The more context you provide, the better the answers.</p>
+    <div class="flex flex-col w-full h-full text-satlantis-blue relative">
+        <!-- API Status Indicator - Always visible -->
+        <div class="absolute top-4 left-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-100">
+            <div class="w-2 h-2 rounded-full animate-pulse" 
+                 [class.bg-green-500]="isApiOnline" 
+                 [class.bg-red-500]="!isApiOnline"></div>
+            <span class="text-xs font-medium text-gray-700">
+                {{ isApiOnline ? 'API Online' : 'API Offline' }}
+            </span>
+        </div>
+
+        <div *ngIf="!hasStartedChat" class="flex flex-col justify-center items-center gap-6 h-full px-4 overflow-y-auto bg-gradient-to-br from-gray-50/30 to-blue-50/20">
+
+            <!-- Header Section -->
+            <div class="text-center max-w-4xl animate-fade-in">
+                <h1 class="text-4xl font-bold mb-3 text-satlantis-blue tracking-tight">
+                    Welcome to Chatlantis
+                </h1>
+                <p class="text-lg text-gray-600 font-light">Your expert assistant for Satlantis questions</p>
+                <div class="mt-3 w-24 h-1 rounded-full mx-auto animate-gradient-move"></div>
             </div>
-            <div class="relative w-6/10 mt-4 mb-4 z-10">
-                <input 
-                    #chatInput
-                    type="text" 
-                    placeholder="Ask anything" 
-                    class="border-2 border-gray-200 rounded-md p-2 w-full pr-10" 
-                    [(ngModel)]="inputValue"
-                    (keydown.enter)="onArrowClick()"
-                    [disabled]="selectedChat?.isWaitingForBot || false"
-                />
-                <i 
-                    class="fa-solid fa-xl fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
-                    [class.text-gray-400]="!inputValue" 
-                    [class.text-satlantis-orange]="inputValue" 
-                    [class.cursor-not-allowed]="!inputValue"
-                    [class.cursor-pointer]="inputValue"
-                    (click)="onArrowClick()"
-                ></i>
+
+            <!-- Features Section -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl w-full animate-slide-up">
+                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
+                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
+                        <i class="fa-solid fa-folder text-satlantis-blue text-sm group-hover:animate-bounce"></i>
+                    </div>
+                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">SharePoint Content</h3>
+                    <div class="w-10 h-0.5 bg-satlantis-blue/20 rounded-full mx-auto"></div>
+                </div>
+                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
+                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-orange/10 to-satlantis-orange/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
+                        <i class="fa-solid fa-globe text-satlantis-orange text-sm group-hover:animate-bounce"></i>
+                    </div>
+                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">Website Information</h3>
+                    <div class="w-10 h-0.5 bg-satlantis-orange/20 rounded-full mx-auto"></div>
+                </div>
+                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
+                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
+                        <i class="fa-solid fa-external-link text-satlantis-blue text-sm group-hover:animate-bounce"></i>
+                    </div>
+                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">Direct Links</h3>
+                    <div class="w-10 h-0.5 bg-satlantis-blue/20 rounded-full mx-auto"></div>
+                </div>
+            </div>
+
+            <!-- Example Questions -->
+            <div class="max-w-4xl w-full animate-slide-up-delayed">
+                <h2 class="text-lg font-semibold text-satlantis-blue mb-3 text-center">Try asking about:</h2>
+                <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    <button 
+                        *ngFor="let example of exampleQuestions; let i = index" 
+                        class="group bg-white hover:bg-gradient-to-br hover:from-satlantis-blue/5 hover:to-satlantis-orange/5 border border-gray-200 hover:border-satlantis-orange/50 rounded-xl p-1.5 text-center transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-105 hover:-translate-y-1"
+                        [style.animation-delay]="(i * 100) + 'ms'"
+                        (click)="selectExample(example.question)"
+                    >
+                        <div class="flex flex-col items-center gap-1">
+                            <div class="w-10 h-10 bg-gradient-to-br from-satlantis-orange/10 to-satlantis-orange/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-all duration-300">
+                                <i [class]="example.icon" class="text-satlantis-orange text-sm group-hover:animate-pulse transition-colors duration-300"></i>
+                            </div>
+                            <span class="font-medium text-satlantis-blue group-hover:text-satlantis-orange transition-colors text-xs leading-tight">
+                                {{ example.category }}
+                            </span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Input -->
+            <div class="relative w-8/10 mt-2 animate-slide-up-more-delayed">
+                <div class="relative">
+                    <input 
+                        #chatInput
+                        type="text" 
+                        placeholder="Ask anything..." 
+                        class="border-2 border-gray-200 hover:border-satlantis-blue/50 focus:border-satlantis-blue rounded-md p-3 w-full pr-12 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-satlantis-blue/20 transition-all duration-300 placeholder:text-sm" 
+                        [(ngModel)]="inputValue"
+                        (keydown.enter)="onArrowClick()"
+                        [disabled]="selectedChat?.isWaitingForBot || false"
+                    />
+                    <i 
+                        class="fa-solid fa-lg fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-110"
+                        [class.text-gray-400]="!inputValue" 
+                        [class.text-satlantis-orange]="inputValue" 
+                        [class.cursor-not-allowed]="!inputValue"
+                        [class.cursor-pointer]="inputValue"
+                        (click)="onArrowClick()"
+                    ></i>
+                </div>
             </div>
         </div>
 

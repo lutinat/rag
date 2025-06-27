@@ -46,11 +46,14 @@ export class ChatComponent {
   ) {
     // Log the API URL being used for debugging
     console.log('Chat component initialized with API URL:', this.apiService.getCurrentApiUrl());
+    // Check API health on startup
+    this.checkApiHealth();
   }
 
   inputValue: string = '';
   isSidebarOpen: boolean = false;
   hasStartedChat: boolean = false;
+  isApiOnline: boolean = true;
 
   chats: Chat[] = [
     { id: 1, title: 'New chat', messages: [], isWaitingForBot: false }
@@ -60,6 +63,40 @@ export class ChatComponent {
 
   showEditModal = false;
   editingChat: ChatSidebarItem | null = null;
+
+  // Example questions for the welcome page
+  exampleQuestions = [
+    {
+      category: "GARAI-A Mission",
+      question: "What is the GARAI-A satellite's mission and when was it launched?",
+      icon: "fa-solid fa-satellite"
+    },
+    {
+      category: "GEISAT Specifications",
+      question: "What are the main technical specifications and applications of GEISAT?",
+      icon: "fa-solid fa-globe"
+    },
+    {
+      category: "Camera Systems",
+      question: "What are the main differences between ISIM-90 and ISIM-170 camera systems?",
+      icon: "fa-solid fa-microchip"
+    },
+    {
+      category: "UHR Processing",
+      question: "What are the main steps of the Ultra-High Resolution (UHR) processing pipeline?",
+      icon: "fa-solid fa-route"
+    },
+    {
+      category: "Satlantis Origin",
+      question: "What is the origin story of the company Satlantis?",
+      icon: "fa-solid fa-building"
+    },
+    {
+      category: "Technology & Innovation",
+      question: "How does Satlantis ensure high image quality and calibration in its payloads?",
+      icon: "fa-solid fa-database"
+    }
+  ];
 
   get selectedChat(): Chat | undefined {
     const chat = this.chats.find(chat => chat.id === this.selectedChatId);
@@ -136,9 +173,23 @@ export class ChatComponent {
         targetChat.title = userQuestion.slice(0, 30) + (userQuestion.length > 30 ? '...' : '');
       }
       this.scrollToBottom();
-      targetChat.isWaitingForBot = true;
       this.inputValue = '';
 
+      // Check if API is offline
+      if (!this.isApiOnline) {
+        targetChat.messages.push({
+          content: this.sanitizeHtml('Error: Unable to get response from the API server. The API appears to be offline. Please try again later.'),
+          isUser: false,
+          sources: []
+        });
+        if (targetChat.id === this.selectedChatId) {
+          this.scrollToBottom();
+          setTimeout(() => this.chatInput?.nativeElement.focus(), 0);
+        }
+        return;
+      }
+
+      targetChat.isWaitingForBot = true;
       const chatId = targetChat.chatId || this.apiService.generateChatId();
       if (!targetChat.chatId) {
         targetChat.chatId = chatId;
@@ -164,8 +215,10 @@ export class ChatComponent {
         error: (error) => {
           console.error('Error getting answer from API:', error);
           console.error('API URL used:', this.apiService.getCurrentApiUrl());
+          // Update API status to offline if error occurs
+          this.isApiOnline = false;
           targetChat.messages.push({
-            content: this.sanitizeHtml(`Error: Unable to get response from the API server. Please check if the server is running on ${this.apiService.getCurrentApiUrl()}`),
+            content: this.sanitizeHtml('Sorry, the API is currently offline. Please check your connection and try again later.'),
             isUser: false,
             sources: []
           });
@@ -254,5 +307,26 @@ export class ChatComponent {
   onCancelEdit() {
     this.showEditModal = false;
     this.editingChat = null;
+  }
+
+  selectExample(question: string): void {
+    this.inputValue = question;
+    // Optionally auto-send the question
+    setTimeout(() => {
+      this.onArrowClick();
+    }, 100);
+  }
+
+  checkApiHealth(): void {
+    this.apiService.checkApiHealth().subscribe({
+      next: (response) => {
+        this.isApiOnline = true;
+        console.log('API health check successful:', response);
+      },
+      error: (error) => {
+        this.isApiOnline = false;
+        console.error('API health check failed:', error);
+      }
+    });
   }
 }
