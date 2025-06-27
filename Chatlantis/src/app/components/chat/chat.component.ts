@@ -54,6 +54,7 @@ export class ChatComponent {
   isSidebarOpen: boolean = false;
   hasStartedChat: boolean = false;
   isApiOnline: boolean = true;
+  showHelpModal: boolean = false;
 
   chats: Chat[] = [
     { id: 1, title: 'New chat', messages: [], isWaitingForBot: false }
@@ -73,7 +74,7 @@ export class ChatComponent {
     },
     {
       category: "GEISAT Specifications",
-      question: "What are the main technical specifications and applications of GEISAT?",
+      question: "What are the main technical specifications of GEISAT?",
       icon: "fa-solid fa-globe"
     },
     {
@@ -88,7 +89,7 @@ export class ChatComponent {
     },
     {
       category: "Satlantis Origin",
-      question: "What is the origin story of the company Satlantis?",
+      question: "What is the origin story of the Satlantis company?",
       icon: "fa-solid fa-building"
     },
     {
@@ -158,6 +159,8 @@ export class ChatComponent {
   private sanitizeHtml(text: string): SafeHtml {
     return this.sanitizer.bypassSecurityTrustHtml(text);
   }
+
+
 
   onArrowClick(): void {
     if (this.inputValue && !this.selectedChat?.isWaitingForBot && this.selectedChat) {
@@ -328,5 +331,9 @@ export class ChatComponent {
         console.error('API health check failed:', error);
       }
     });
+  }
+
+  toggleHelpModal(): void {
+    this.showHelpModal = !this.showHelpModal;
   }
 }

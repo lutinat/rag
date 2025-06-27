@@ -18,8 +18,8 @@
     ></app-sidebar>
 
     <div class="flex flex-col w-full h-full text-satlantis-blue relative">
-        <!-- API Status Indicator - Always visible -->
-        <div class="absolute top-4 left-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-100">
+        <!-- API Status Indicator - Only visible on welcome page -->
+        <div *ngIf="!hasStartedChat" class="absolute top-4 left-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border border-gray-100">
             <div class="w-2 h-2 rounded-full animate-pulse" 
                  [class.bg-green-500]="isApiOnline" 
                  [class.bg-red-500]="!isApiOnline"></div>
@@ -27,6 +27,12 @@
                 {{ isApiOnline ? 'API Online' : 'API Offline' }}
             </span>
         </div>
+
+        <!-- Help Icon - Only visible on welcome page -->
+        <button *ngIf="!hasStartedChat" class="absolute top-4 right-4 z-50 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-white hover:shadow-xl transition-all duration-300 group cursor-pointer"
+                (click)="toggleHelpModal()">
+            <i class="fa-solid fa-question text-satlantis-blue text-sm group-hover:scale-110 transition-transform duration-200"></i>
+        </button>
 
         <div *ngIf="!hasStartedChat" class="flex flex-col justify-center items-center gap-6 h-full px-4 overflow-y-auto bg-gradient-to-br from-gray-50/30 to-blue-50/20">
 
@@ -40,27 +46,27 @@
             </div>
 
             <!-- Features Section -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl w-full animate-slide-up">
-                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
-                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
-                        <i class="fa-solid fa-folder text-satlantis-blue text-sm group-hover:animate-bounce"></i>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full animate-slide-up">
+                <div class="group bg-white rounded-xl p-4 shadow-lg border border-gray-100 text-center transition-all duration-300">
+                    <div class="flex justify-center gap-2 mb-2">
+                        <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                            <i class="fa-solid fa-folder text-satlantis-blue text-sm group-hover:animate-bounce"></i>
+                        </div>
+                        <div class="w-8 h-8 bg-gradient-to-br from-satlantis-orange/10 to-satlantis-orange/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                            <i class="fa-solid fa-globe text-satlantis-orange text-sm group-hover:animate-bounce"></i>
+                        </div>
                     </div>
-                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">SharePoint Content</h3>
-                    <div class="w-10 h-0.5 bg-satlantis-blue/20 rounded-full mx-auto"></div>
+                    <h3 class="font-semibold text-satlantis-blue text-sm mb-2">RAG Knowledge Base</h3>
+                    <p class="text-xs text-gray-600">SharePoint & Website Content</p>
+                    <div class="w-16 h-0.5 bg-gradient-to-r from-satlantis-blue/20 to-satlantis-orange/20 rounded-full mx-auto mt-2"></div>
                 </div>
-                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
-                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-orange/10 to-satlantis-orange/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
-                        <i class="fa-solid fa-globe text-satlantis-orange text-sm group-hover:animate-bounce"></i>
-                    </div>
-                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">Website Information</h3>
-                    <div class="w-10 h-0.5 bg-satlantis-orange/20 rounded-full mx-auto"></div>
-                </div>
-                <div class="group bg-white rounded-xl p-3 shadow-lg hover:shadow-xl border border-gray-100 text-center transition-all duration-300">
-                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center mx-auto mb-1.5 group-hover:scale-110 transition-transform duration-300">
+                <div class="group bg-white rounded-xl p-4 shadow-lg border border-gray-100 text-center transition-all duration-300">
+                    <div class="w-8 h-8 bg-gradient-to-br from-satlantis-blue/10 to-satlantis-blue/20 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform duration-300">
                         <i class="fa-solid fa-external-link text-satlantis-blue text-sm group-hover:animate-bounce"></i>
                     </div>
-                    <h3 class="font-semibold text-satlantis-blue text-xs mb-1.5">Direct Links</h3>
-                    <div class="w-10 h-0.5 bg-satlantis-blue/20 rounded-full mx-auto"></div>
+                    <h3 class="font-semibold text-satlantis-blue text-sm mb-2">Link Attribution</h3>
+                    <p class="text-xs text-gray-600">Precise page links & specific PDF pages</p>
+                    <div class="w-16 h-0.5 bg-satlantis-blue/20 rounded-full mx-auto mt-2"></div>
                 </div>
             </div>
 
@@ -70,7 +76,7 @@
                 <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
                     <button 
                         *ngFor="let example of exampleQuestions; let i = index" 
-                        class="group bg-white hover:bg-gradient-to-br hover:from-satlantis-blue/5 hover:to-satlantis-orange/5 border border-gray-200 hover:border-satlantis-orange/50 rounded-xl p-1.5 text-center transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-105 hover:-translate-y-1"
+                        class="group bg-white hover:bg-gradient-to-br hover:from-satlantis-blue/5 hover:to-satlantis-blue/10 border border-gray-200 hover:border-satlantis-blue/50 rounded-xl p-1.5 text-center transition-all duration-300 cursor-pointer hover:shadow-lg hover:scale-105 hover:-translate-y-1"
                         [style.animation-delay]="(i * 100) + 'ms'"
                         (click)="selectExample(example.question)"
                     >
@@ -110,62 +116,75 @@
             </div>
         </div>
 
-        <div *ngIf="hasStartedChat" class="flex flex-col h-full">
-            <div #messageContainer class="flex-1 overflow-y-auto p-4">
-                <div *ngFor="let message of messages" class="mb-4 flex" [ngClass]="{'justify-end': message.isUser, 'justify-start': !message.isUser}">
+        <div *ngIf="hasStartedChat" class="flex flex-col h-full bg-gradient-to-br from-gray-50/30 to-blue-50/20">
+            <div #messageContainer class="flex-1 overflow-y-auto p-4 space-y-3">
+                <div *ngFor="let message of messages; let i = index" class="flex" 
+                     [ngClass]="{'justify-end': message.isUser, 'justify-start': !message.isUser}">
                   <div
-                    class="px-4 py-2 max-w-[80%]"
+                    class="px-4 py-2 max-w-[80%] backdrop-blur-sm transition-all duration-300"
                     [ngClass]="{
-                      'bg-satlantis-orange/50 text-satlantis-blue rounded-3xl rounded-bl-3xl rounded-tr-3xl rounded-br-3xl text-right self-end': message.isUser,
-                      'bg-white text-satlantis-blue rounded-2xl rounded-bl-2xl rounded-tr-2xl rounded-br-2xl shadow-sm self-start': !message.isUser
+                      'bg-gradient-to-br from-satlantis-orange/60 to-satlantis-orange/40 text-satlantis-blue rounded-3xl shadow-lg border border-satlantis-orange/20 text-right self-end': message.isUser,
+                      'bg-white/90 text-satlantis-blue rounded-2xl shadow-lg border border-gray-100/50 self-start': !message.isUser
                     }"
                     style="word-break: break-word;"
                   >
-                    <div [innerHTML]="message.content"></div>
-                    <div *ngIf="!message.isUser && message.sources" class="mt-2 text-sm">
-                      <div class="font-semibold">Sources:</div>
-                      <div *ngFor="let source of message.sources">
-                        <a 
-                          *ngIf="source.url" 
-                          [href]="source.url" 
-                          target="_blank" 
-                          class="text-satlantis-blue hover:underline cursor-pointer"
-                          [title]="source.title || source.url"
-                        >
-                          {{ source.display_name }}
-                        </a>
-                        <span *ngIf="!source.url" class="text-gray-600">
-                          {{ source.display_name }}
-                        </span>
+                    <div [innerHTML]="message.content" class="leading-relaxed"></div>
+                    <div *ngIf="!message.isUser && message.sources" class="mt-3 pt-3 border-t border-gray-200/50 text-sm">
+                      <div class="font-semibold text-satlantis-blue/80 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-link text-xs"></i>
+                        Sources:
+                      </div>
+                      <div class="space-y-1">
+                        <div *ngFor="let source of message.sources; let i = index" class="flex items-center gap-2">
+                          <span class="text-satlantis-blue font-medium text-sm w-6 flex-shrink-0">
+                            {{ i + 1 }}.
+                          </span>
+                          <i class="fa-solid fa-external-link text-xs" 
+                             [class.text-satlantis-orange]="source.url" 
+                             [class.text-gray-400]="!source.url"></i>
+                          <a 
+                            *ngIf="source.url" 
+                            [href]="source.url" 
+                            target="_blank" 
+                            class="text-satlantis-blue hover:text-satlantis-orange hover:underline cursor-pointer transition-colors duration-200 flex-1 truncate"
+                            [title]="source.title || source.url"
+                          >
+                            {{ source.display_name }}
+                          </a>
+                          <span *ngIf="!source.url" class="text-gray-600 flex-1 truncate" [title]="source.display_name">
+                            {{ source.display_name }}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div *ngIf="isCurrentChatWaiting" class="mb-4 flex justify-start">
-                  <div class="px-4 py-2 bg-white text-satlantis-blue rounded-2xl rounded-bl-2xl rounded-tr-2xl rounded-br-2xl shadow-sm self-start">
+                <div *ngIf="isCurrentChatWaiting" class="flex justify-start">
+                  <div class="px-5 py-3 bg-white/90 text-satlantis-blue rounded-2xl shadow-lg border border-gray-100/50 backdrop-blur-sm self-start">
                     <div class="flex items-center gap-2">
                       <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce"></div>
                       <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                       <div class="w-2 h-2 bg-satlantis-blue rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                      <span class="text-sm text-gray-500 ml-2">Thinking...</span>
                     </div>
                   </div>
                 </div>
             </div>
 
-            <div class="bg-white p-4">
-                <div class="relative">
+            <div class="bg-gradient-to-br from-gray-50/30 to-blue-50/20 p-4 border-t border-gray-200/20">
+                <div class="relative w-full">
                     <input 
                         #chatInput
                         type="text" 
-                        placeholder="Ask anything" 
-                        class="w-full p-3 pr-12 bg-gray-50 focus:outline-none" 
+                        placeholder="Ask anything..." 
+                        class="border-2 border-gray-200 hover:border-satlantis-blue/50 focus:border-satlantis-blue rounded-md p-3 w-full pr-16 bg-white/80 backdrop-blur-sm shadow-lg hover:shadow-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-satlantis-blue/20 transition-all duration-300 placeholder:text-sm text-base" 
                         [(ngModel)]="inputValue"
                         (keydown.enter)="onArrowClick()"
                         [disabled]="selectedChat?.isWaitingForBot || false"
                     />
                     <i 
-                        class="fa-solid fa-xl fa-circle-arrow-right text-satlantis-orange absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer"
+                        class="fa-solid fa-lg fa-circle-arrow-right text-satlantis-orange absolute right-4 top-1/2 transform -translate-y-1/2 cursor-pointer transition-all duration-300 hover:scale-110"
                         [class.text-gray-400]="!inputValue" 
                         [class.text-satlantis-orange]="inputValue" 
                         [class.cursor-not-allowed]="!inputValue"
@@ -185,3 +204,80 @@
     (save)="onSaveEdit($event)"
     (cancel)="onCancelEdit()">
 </app-edit-chat-modal>
+
+<!-- Help Modal -->
+<div *ngIf="showHelpModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" (click)="toggleHelpModal()">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" (click)="$event.stopPropagation()">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-satlantis-blue">How Chatlantis Works</h2>
+                <button (click)="toggleHelpModal()" class="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4 text-gray-700">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 class="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-exclamation-triangle"></i>
+                        Important Notice
+                    </h4>
+                    <p class="text-sm text-yellow-700">
+                        <strong>Chatlantis is primarily a document search tool.</strong> AI-generated answers may contain errors or inaccuracies. Always verify information by checking the provided source links before making decisions or taking action.
+                    </p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-satlantis-blue mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-brain text-satlantis-orange"></i>
+                        Retrieval-Augmented Generation (RAG)
+                    </h3>
+                    <p class="text-sm">Chatlantis uses RAG technology to provide accurate, source-backed answers by combining AI reasoning with your organization's knowledge base.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-satlantis-blue mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-folder text-satlantis-orange"></i>
+                        SharePoint Content
+                    </h3>
+                    <p class="text-sm">Internal SharePoint documents, policies, and knowledge base content have been scraped and processed into searchable chunks for precise information retrieval.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-satlantis-blue mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-globe text-satlantis-orange"></i>
+                        Website Content
+                    </h3>
+                    <p class="text-sm">The entire Satlantis website has been scraped and chunked into the knowledge base, including public documentation, product information, and technical resources.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-satlantis-blue mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-link text-satlantis-orange"></i>
+                        Link Attribution
+                    </h3>
+                    <p class="text-sm">Every answer includes precise page links for websites and specific page references for PDF documents, so you can verify information and access the exact source.</p>
+                </div>
+
+
+
+                <div class="bg-satlantis-blue/5 rounded-lg p-4 mt-4">
+                    <h4 class="font-semibold text-satlantis-blue mb-2">💡 Tips for Best Results:</h4>
+                    <ul class="text-sm space-y-1 list-disc list-inside">
+                        <li>Be specific with your questions</li>
+                        <li>Include relevant context (project names, dates, etc.)</li>
+                        <li>Use the example topics to get started</li>
+                        <li>Always verify answers using the provided source links</li>
+                    </ul>
+                </div>
+
+                <div class="border-t border-gray-200 mt-6 pt-4">
+                    <p class="text-xs text-gray-500 text-center">
+                        Developed by <span class="font-medium text-satlantis-blue">Lucas Dubois</span> and <span class="font-medium text-satlantis-blue">Neo Elduayen</span><br>
+                        from <span class="font-medium text-satlantis-orange">Satlantis France</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
