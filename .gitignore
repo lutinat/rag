@@ -1,5 +1,7 @@
 # Ignore data and config files
 *.pdf
+*.csv
+*.docx
 *.txt
 *.json
 *.jsonl

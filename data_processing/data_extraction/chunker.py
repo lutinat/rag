@@ -1,11 +1,13 @@
 import re
+from .csv_loader import load_csv_docling
 import spacy
 from typing import List, Dict
 from utils import save_chunks_jsonl
 import os
 from glob import glob
-from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf, load_pdf_spacy
-from .pdf_loader import load_txt_web
+# These imports will be done locally in functions to avoid circular imports
+# from .pdf_loader import extract_text_from_pdf, extract_metadata_from_pdf, load_pdf_spacy
+# from .pdf_loader import load_txt_web
 from tqdm import tqdm
 import subprocess
 import numpy as np
@@ -334,6 +336,7 @@ def download_pdf_to_temp(remote_path, temp_dir=None):
 def get_all_chunks(folder_path: str, chunk_folder_path: str):
     """
     Process multiple PDFs, extract text and metadata, chunk the text, and save chunks to JSONL.
+    Now supports SharePoint metadata from .meta files.
     
     Args:
         folder_path (str): The directory containing PDFs to process.
@@ -343,10 +346,27 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
     pdf_paths = glob(os.path.join(folder_path, "*.pdf"))
     txt_paths = sorted(glob(os.path.join(folder_path, "*.txt")))
     csv_paths = glob(os.path.join(folder_path, "*.csv"))
+    docx_paths = glob(os.path.join(folder_path, "*.docx"))
+    doc_paths = glob(os.path.join(folder_path, "*.doc"))
     all_chunks = []
+
+    def load_sharepoint_metadata(file_path: str) -> dict:
+        """Load SharePoint metadata from .meta file if it exists."""
+        meta_path = file_path + ".meta"
+        if os.path.exists(meta_path):
+            try:
+                import json
+                with open(meta_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading metadata from {meta_path}: {e}")
+        return {}
 
     # PDF FILES
     print(f"Processing {len(pdf_paths)} PDFs")
+    # Import pdf_loader functions locally to avoid circular import
+    from .pdf_loader import load_pdf_spacy, extract_metadata_from_pdf
+    
     for pdf_path in tqdm(pdf_paths):
         print(f"Processing {pdf_path}")
         # Extract text and metadata
@@ -356,7 +376,14 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
             print(f"Failed to extract from {pdf_path}: {e}")
             continue
 
-        metadata = extract_metadata_from_pdf(pdf_path)
+        # Get PDF metadata
+        pdf_metadata = extract_metadata_from_pdf(pdf_path)
+        
+        # Load SharePoint metadata if available
+        sharepoint_metadata = load_sharepoint_metadata(pdf_path)
+        
+        # Merge metadata (SharePoint metadata takes precedence)
+        metadata = {**pdf_metadata, **sharepoint_metadata}
         
         # Extract chunks from the text
         chunks = extract_chunks(text, source_name=pdf_path, metadata=metadata)
@@ -369,9 +396,85 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         # Save the chunks to JSONL
         save_chunks_jsonl(chunks, chunk_path)
 
+    # DOCX FILES
+    print(f"Processing {len(docx_paths)} DOCX files")
+    # Import pdf_loader functions locally to avoid circular import
+    from .pdf_loader import load_txt_web
+    from .docx_loader import load_docx_docling
+    
+    for docx_path in tqdm(docx_paths):
+        print(f"Processing {docx_path}")
+        try:
+            text = load_docx_docling(docx_path)
+        except Exception as e:
+            print(f"Failed to extract from {docx_path}: {e}")
+            continue
+
+        # Load SharePoint metadata if available
+        sharepoint_metadata = load_sharepoint_metadata(docx_path)
+        
+        # Create basic metadata
+        metadata = {
+            'filename': os.path.basename(docx_path),
+            'source_type': 'docx'
+        }
+        
+        # Merge with SharePoint metadata
+        metadata = {**metadata, **sharepoint_metadata}
+        
+        # Extract chunks from the text
+        chunks = extract_chunks(text, source_name=docx_path, metadata=metadata)
+        all_chunks.extend(chunks)
+        
+        # Generate a filename for the JSONL chunk file
+        chunk_filename = os.path.basename(docx_path).replace(".docx", "_chunks.jsonl")
+        chunk_path = os.path.join(chunk_folder_path, chunk_filename)
+        
+        # Save the chunks to JSONL
+        save_chunks_jsonl(chunks, chunk_path)
+
+    # DOC FILES
+    print(f"Processing {len(doc_paths)} DOC files")
+    # Import pdf_loader functions locally to avoid circular import
+    from .pdf_loader import load_txt_web
+    from .docx_loader import load_docx_docling
+    
+    for doc_path in tqdm(doc_paths):
+        print(f"Processing {doc_path}")
+        try:
+            text = load_docx_docling(doc_path)
+        except Exception as e:
+            print(f"Failed to extract from {doc_path}: {e}")
+            continue
+
+        # Load SharePoint metadata if available
+        sharepoint_metadata = load_sharepoint_metadata(doc_path)
+        
+        # Create basic metadata
+        metadata = {
+            'filename': os.path.basename(doc_path),
+            'source_type': 'doc'
+        }
+        
+        # Merge with SharePoint metadata
+        metadata = {**metadata, **sharepoint_metadata}
+        
+        # Extract chunks from the text
+        chunks = extract_chunks(text, source_name=doc_path, metadata=metadata)
+        all_chunks.extend(chunks)
+        
+        # Generate a filename for the JSONL chunk file
+        chunk_filename = os.path.basename(doc_path).replace(".doc", "_chunks.jsonl")
+        chunk_path = os.path.join(chunk_folder_path, chunk_filename)
+        
+        # Save the chunks to JSONL
+        save_chunks_jsonl(chunks, chunk_path)
 
     # TXT FILES
     print(f"Processing {len(txt_paths)} TXT files")
+    # Import pdf_loader functions locally to avoid circular import
+    from .pdf_loader import load_txt_web
+    
     for txt_path in tqdm(txt_paths):
         # print(f"Processing {txt_path}")
         text = load_txt_web(txt_path)
@@ -408,6 +511,12 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         if title:
             metadata['title'] = title
         
+        # Load SharePoint metadata if available
+        sharepoint_metadata = load_sharepoint_metadata(txt_path)
+        
+        # Merge with SharePoint metadata
+        metadata = {**metadata, **sharepoint_metadata}
+        
         # Use the standard extract_chunks function
         chunks = extract_chunks(text, source_name=txt_path, metadata=metadata)
         all_chunks.extend(chunks)
@@ -420,7 +529,38 @@ def get_all_chunks(folder_path: str, chunk_folder_path: str):
         save_chunks_jsonl(chunks, chunk_path)
     
     # CSV FILES
-    # TODO: Implement CSV files
+    print(f"Processing {len(csv_paths)} CSVs")
+    for csv_path in tqdm(csv_paths):
+        print(f"Processing {csv_path}")
+        # Extract text and metadata
+        try:
+            text = load_csv_docling(csv_path)
+        except Exception as e:
+            print(f"Failed to extract from {csv_path}: {e}")
+            continue
+
+        # Load SharePoint metadata if available
+        sharepoint_metadata = load_sharepoint_metadata(csv_path)
+        
+        # Create basic metadata
+        metadata = {
+            'filename': os.path.basename(csv_path),
+            'source_type': 'csv'
+        }
+        
+        # Merge with SharePoint metadata
+        metadata = {**metadata, **sharepoint_metadata}
+        
+        # Extract chunks from the text
+        chunks = extract_chunks(text, source_name=csv_path, metadata=metadata)
+        all_chunks.extend(chunks)
+        
+        # Generate a filename for the JSONL chunk file
+        chunk_filename = os.path.basename(csv_path).replace(".csv", "_chunks.jsonl")
+        chunk_path = os.path.join(chunk_folder_path, chunk_filename)
+        
+        # Save the chunks to JSONL
+        save_chunks_jsonl(chunks, chunk_path)
     
     print(f"Total chunks: {len(all_chunks)}")
     return all_chunks

@@ -10,8 +10,16 @@ import spacy
 import pandas as pd
 import concurrent.futures
 from tqdm import tqdm
+from dotenv import load_dotenv
+import tempfile
+import requests
+from pathlib import Path
 
 from spacy_layout import spaCyLayout
+
+# Import other loaders
+from .docx_loader import load_docx_docling
+from .csv_loader import load_csv_docling
 
 
 def load_pdf_spacy(pdf_path: str) -> str:
@@ -269,68 +277,235 @@ def get_metadata_plumberpdf(pdf_path: str) -> Dict:
     return metadata
 
 
-if __name__ == "__main__":
-    from office365.sharepoint.client_context import ClientContext
-    from office365.runtime.auth.user_credential import UserCredential
-
+def process_sharepoint_documents_to_chunks(sharepoint_site: str = None, 
+                                          document_library: str = None,
+                                          output_folder: str = "processed_data") -> List[Dict]:
+    """
+    Process all documents from SharePoint and convert them to chunks with metadata.
+    Uses the existing get_all_chunks function for processing.
+    
+    Args:
+        sharepoint_site: SharePoint site to process (if None, uses first site)
+        document_library: Document library to process (if None, uses default)
+        output_folder: Output folder for chunks
+        
+    Returns:
+        List[Dict]: List of chunks with metadata
+    """
+    # Load environment variables
+    load_dotenv()
+    
     base_url = "https://satlantis.sharepoint.com"
-
+    
     # SharePoint site URL
-    sharepoint_sites = ["/sites/ImgProcss", "/sites/intranet", "/sites/SATLANTISFrance"]
-
+    sharepoint_sites = ["/sites/SATLANTISFrance"]
+    
     # Document library names for each site
     document_libraries = {
-        "/sites/ImgProcss": "Documents",
-        "/sites/intranet": "Documentos%20compartidos", 
-        "/sites/SATLANTISFrance": "Documents"
+        "/sites/SATLANTISFrance": "Documents/Projects/2024_FUSE-POLARISAT"
     }
-
-    sharepoint_site = sharepoint_sites[0]
-    site_url = base_url + sharepoint_site
-
-    # Your credentials
-    username = ""
-    password = ""
-
-    ctx = ClientContext(site_url).with_credentials(UserCredential(username, password))
-
-    def list_pdfs_recursively(folder_relative_url):
-        folder = ctx.web.get_folder_by_server_relative_url(folder_relative_url)
-        ctx.load(folder)
-        ctx.execute_query()
-
-        # Lister les fichiers dans le dossier
-        files = folder.files
-        ctx.load(files)
-        ctx.execute_query()
-        for file in files:
-            if file.properties["Name"].lower().endswith(".pdf"):
-                # Get the file's server relative URL
-                file_relative_url = file.properties["ServerRelativeUrl"]
-                # Construct the full download URL
-                file_download_url = f"{base_url}{file_relative_url}"
-                
-                # Construct SharePoint viewer URL (opens in SharePoint's PDF viewer)
-                file_viewer_url = f"{base_url}{sharepoint_site}/_layouts/15/WopiFrame.aspx?sourcedoc={file_relative_url}&action=default"
-                
-                print(f"PDF: {file.properties['Name']}")
-                print(f"Direct Link: {file_download_url}")
-                print(f"SharePoint Viewer: {file_viewer_url}")
-                print(f"Page 5 Link (PDF viewer): {file_download_url}#page=5")
-                print(f"Page 10 Link (PDF viewer): {file_download_url}#page=10")
-                print(f"Path: {folder_relative_url}/{file.properties['Name']}")
-                print("---")
-
-        # Lister les sous-dossiers
-        folders = folder.folders
-        ctx.load(folders)
-        ctx.execute_query()
-        for subfolder in folders:
-            subfolder_url = subfolder.properties["ServerRelativeUrl"]
-            list_pdfs_recursively(subfolder_url)
-
-    # Get the appropriate document library for the selected site
-    document_library = document_libraries.get(sharepoint_site, "Documents")
     
-    # Démarrer la recherche à la racine de la bibliothèque Documents
-    list_pdfs_recursively(sharepoint_site + "/" + document_library)
+    if sharepoint_site is None:
+        sharepoint_site = sharepoint_sites[0]
+    
+    if document_library is None:
+        document_library = document_libraries.get(sharepoint_site, "Documents")
+    
+    site_url = base_url + sharepoint_site
+    
+    # Get credentials from environment variables
+    username = os.getenv("SHAREPOINT_USERNAME")
+    password = os.getenv("SHAREPOINT_PASSWORD")
+    
+    if not username or not password:
+        raise ValueError("SHAREPOINT_USERNAME and SHAREPOINT_PASSWORD must be set in .env file")
+    
+    # Create temporary folder for downloaded files
+    temp_folder = f"temp_sharepoint_{sharepoint_site.replace('/', '_')}"
+    os.makedirs(temp_folder, exist_ok=True)
+    
+    # Create output folder
+    os.makedirs(output_folder, exist_ok=True)
+    
+    def create_sharepoint_context():
+        """Create a new SharePoint context."""
+        return ClientContext(site_url).with_credentials(UserCredential(username, password))
+    
+    def download_document(file_info, folder_relative_url):
+        """Download a document and add SharePoint metadata."""
+        try:
+            # Create a new context for each download to avoid closed file issues
+            ctx = create_sharepoint_context()
+            
+            file_name = file_info["Name"]
+            file_relative_url = file_info["ServerRelativeUrl"]
+            file_download_url = f"{base_url}{file_relative_url}"
+            file_viewer_url = f"{base_url}{sharepoint_site}/_layouts/15/WopiFrame.aspx?sourcedoc={file_relative_url}&action=default"
+            
+            print(f"🔄 Téléchargement de : {file_name}")
+            print(f"   URL relative : {file_relative_url}")
+            print(f"   Taille SharePoint : {file_info.get('Length', 'inconnue')} bytes")
+            
+            # Create local file path
+            local_path = os.path.join(temp_folder, file_name)
+            
+            # Get the file object
+            file = ctx.web.get_file_by_server_relative_url(file_relative_url)
+            ctx.load(file)
+            ctx.execute_query()
+            
+            # Download the file
+            try:
+                with open(local_path, 'wb') as local_file:
+                    file.download(local_file).execute_query()
+                
+                # Vérifier que le fichier n'est pas vide
+                if os.path.getsize(local_path) == 0:
+                    print(f"⚠️ Fichier vide téléchargé : {file_name}")
+                    os.remove(local_path)  # Supprimer le fichier vide
+                    return None
+                else:
+                    print(f"✅ Fichier téléchargé avec succès : {file_name} ({os.path.getsize(local_path)} bytes)")
+                    
+            except Exception as download_error:
+                print(f"❌ Error downloading file {file_name}: {download_error}")
+                return None
+            
+            # Add SharePoint metadata to the file
+            metadata_file = local_path + ".meta"
+            metadata = {
+                "source": "sharepoint",
+                "sharepoint_site": sharepoint_site,
+                "document_library": document_library,
+                "folder_path": folder_relative_url,
+                "file_name": file_name,
+                "file_relative_url": file_relative_url,
+                "download_url": file_download_url,
+                "viewer_url": file_viewer_url,
+                "file_size": file_info.get("Length", 0),
+                "created_date": str(file_info.get("TimeCreated", "")) if file_info.get("TimeCreated") else "",
+                "modified_date": str(file_info.get("TimeLastModified", "")) if file_info.get("TimeLastModified") else "",
+                "author": file_info.get("Author", ""),
+                "file_type": Path(file_name).suffix.lower()
+            }
+            
+            try:
+                import json
+                with open(metadata_file, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+                print(f"📝 Métadonnées sauvegardées : {metadata_file}")
+            except Exception as meta_error:
+                print(f"⚠️ Error writing metadata for {file_name}: {meta_error}")
+            
+            return local_path
+            
+        except Exception as e:
+            print(f"❌ Error downloading file {file_info.get('Name', 'unknown')}: {e}")
+            return None
+    
+    def list_and_download_documents_recursively(folder_relative_url):
+        """List and download all documents in a folder recursively."""
+        try:
+            # Create a new context for each folder operation
+            ctx = create_sharepoint_context()
+            
+            folder = ctx.web.get_folder_by_server_relative_url(folder_relative_url)
+            ctx.load(folder)
+            ctx.execute_query()
+            
+            # Process files in current folder
+            try:
+                files = folder.files
+                ctx.load(files)
+                ctx.execute_query()
+                
+                # Get file information first
+                file_infos = []
+                for file in files:
+                    file_infos.append({
+                        "Name": file.properties["Name"],
+                        "ServerRelativeUrl": file.properties["ServerRelativeUrl"],
+                        "Length": file.properties.get("Length", 0),
+                        "TimeCreated": file.properties.get("TimeCreated"),
+                        "TimeLastModified": file.properties.get("TimeLastModified"),
+                        "Author": file.properties.get("Author", "")
+                    })
+                
+                # Now download each file
+                for file_info in file_infos:
+                    file_name = file_info["Name"]
+                    file_extension = Path(file_name).suffix.lower()
+                    
+                    # Only process supported file types
+                    if file_extension in ['.pdf', '.docx', '.doc', '.csv', '.txt']:
+                        print(f"Downloading: {file_name}")
+                        local_path = download_document(file_info, folder_relative_url)
+                        if local_path:
+                            print(f"Downloaded: {local_path}")
+                            
+            except Exception as files_error:
+                print(f"Error processing files in folder {folder_relative_url}: {files_error}")
+            
+            # Process subfolders
+            try:
+                folders = folder.folders
+                ctx.load(folders)
+                ctx.execute_query()
+                
+                for subfolder in folders:
+                    subfolder_url = subfolder.properties["ServerRelativeUrl"]
+                    list_and_download_documents_recursively(subfolder_url)
+            except Exception as folders_error:
+                print(f"Error processing subfolders in {folder_relative_url}: {folders_error}")
+                
+        except Exception as e:
+            print(f"Error processing folder {folder_relative_url}: {e}")
+    
+    # Start downloading from the document library root
+    print(f"Starting to download documents from {sharepoint_site}/{document_library}")
+    list_and_download_documents_recursively(sharepoint_site + "/" + document_library)
+    
+    # Use the existing get_all_chunks function to process the downloaded files
+    print(f"Processing downloaded files with get_all_chunks...")
+    # Import locally to avoid circular import
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    from data_processing.data_extraction.chunker import get_all_chunks
+    all_chunks = get_all_chunks(temp_folder, output_folder)
+    
+    # Clean up temporary folder
+    import shutil
+    shutil.rmtree(temp_folder)
+    
+    print(f"Processed {len(all_chunks)} chunks from SharePoint documents")
+    return all_chunks
+
+
+if __name__ == "__main__":
+    # Process all SharePoint documents and convert to chunks
+    print("Starting SharePoint document processing...")
+    
+    # You can specify a specific site and library, or use defaults
+    # chunks = process_sharepoint_documents_to_chunks(
+    #     sharepoint_site="/sites/intranet",
+    #     document_library="Documentos%20compartidos",
+    #     output_file="intranet_chunks.jsonl"
+    # )
+    
+    # Or process all sites
+    all_chunks = []
+    sharepoint_sites = ["/sites/SATLANTISFrance"]
+    
+    for site in sharepoint_sites:
+        print(f"\nProcessing site: {site}")
+        try:
+            chunks = process_sharepoint_documents_to_chunks(
+                sharepoint_site=site,
+                output_file=f"{site.replace('/', '_')}_chunks.jsonl"
+            )
+            all_chunks.extend(chunks)
+            print(f"Processed {len(chunks)} chunks from {site}")
+        except Exception as e:
+            print(f"Error processing site {site}: {e}")
+    
+    print(f"\nTotal chunks processed: {len(all_chunks)}")
